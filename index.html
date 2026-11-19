@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="吊裝進度">
+    <title>帷幕單元吊裝進度回報與週統計系統</title>
+    <!-- 引入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Google Fonts (Noto Sans TC 與 Inter) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+    <!-- 引入 FontAwesome 圖示 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'Noto Sans TC', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* 優化手機觸控點擊反應，消除 300ms 延遲與反白閃爍 */
+        button, input, textarea {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-16 select-none">
+                </div>
+                <div>
+                    <h1 class="text-lg sm:text-xl font-bold tracking-wide">單元吊裝進度回報系統</h1>
+                    <p class="text-xs text-slate-400">自動累計計算 &bull; 週報統計 (週日~週六)</p>
+                </div>
+            </div>
+            <div class="text-right">
+                <div class="text-xs text-slate-400">整棟總累計</div>
+                <div id="headerTotalCount" class="text-xl sm:text-2xl font-bold text-emerald-400">0 <span class="text-xs font-normal text-slate-300">單元</span></div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="max-w-5xl mx-auto px-4 pt-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- 左側/上方：輸入與點選操作區 (佔 7 欄) -->
+        <div class="lg:col-span-7 space-y-6">
+            
+            <!-- 1. 選擇樓層卡片 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-base font-bold text-slate-800 flex items-center">
+                        <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2">1</span>
+                        選擇樓層
+                    </h2>
+                    <span id="selectedFloorBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
+                        目前選擇：3F
+                    </span>
+                </div>
+                
+                <!-- 樓層按鈕網格 -->
+                <div id="floorGrid" class="grid grid-cols-5 sm:grid-cols-6 gap-2 max-h-60 overflow-y-auto p-1">
+                    <!-- 由 JS 動態生成 1F~27F, R1F~R3F -->
+                </div>
+            </section>
+
+            <!-- 2. 選擇方向與工項卡片 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 space-y-5">
+                <!-- 方向選擇 -->
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center mb-3">
+                        <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2">2</span>
+                        選擇方向
+                    </h2>
+                    <div id="directionGroup" class="grid grid-cols-4 gap-3">
+                        <!-- 由 JS 動態生成 東、西、南、北 -->
+                    </div>
+                </div>
+
+                <hr class="border-slate-100">
+
+                <!-- 工項選擇 -->
+                <div>
+                    <h2 class="text-base font-bold text-slate-800 flex items-center mb-3">
+                        <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2">3</span>
+                        選擇工項類型
+                    </h2>
+                    <div id="typeGroup" class="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                        <!-- 由 JS 動態生成 P1, P2, P2前置, WW, P3, P4, P5 -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. 數量與日期輸入卡片 -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <h2 class="text-base font-bold text-slate-800 flex items-center mb-4">
+                    <span class="bg-blue-100 text-blue-700 w-6 h-6 rounded-full inline-flex items-center justify-center text-xs mr-2">4</span>
+                    輸入完成數量與日期
+                </h2>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- 施工日期 -->
+                    <div>
+                        <label for="recordDate" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">施工日期 (自動判定週別)</label>
+                        <input type="date" id="recordDate" class="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-300 rounded-xl text-slate-800 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                    </div>
+
+                    <!-- 今日完成數量 -->
+                    <div>
+                        <label for="todayCount" class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">今日完成單元數量</label>
+                        <div class="flex items-center">
+                            <button type="button" onclick="adjustCount(-1)" class="w-12 h-12 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-l-xl border border-r-0 border-slate-300 flex items-center justify-center font-bold text-lg transition">
+                                <i class="fa-solid fa-minus text-sm"></i>
+                            </button>
+                            <input type="number" inputmode="numeric" pattern="[0-9]*" id="todayCount" value="1" min="1" class="w-full h-12 text-center bg-white border border-slate-300 text-slate-900 font-bold text-xl focus:outline-none focus:ring-2 focus:ring-blue-500 z-10">
+                            <button type="button" onclick="adjustCount(1)" class="w-12 h-12 bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-slate-700 rounded-r-xl border border-l-0 border-slate-300 flex items-center justify-center font-bold text-lg transition">
+                                <i class="fa-solid fa-plus text-sm"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 數據微調/校正折疊區 (方便使用者設定初始歷史累計) -->
+                <div class="mt-4 pt-3 border-t border-slate-100">
+                    <button type="button" onclick="toggleCalibration()" class="text-xs text-slate-500 hover:text-blue-600 flex items-center transition">
+                        <i class="fa-solid fa-sliders mr-1.5"></i> 歷史基準值校正 (若已有舊進度可點此設定初始累計)
+                        <i id="calibChevron" class="fa-solid fa-chevron-down ml-1 text-[10px] transition-transform"></i>
+                    </button>
+                    <div id="calibrationPanel" class="hidden mt-3 p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-amber-900 mb-1">
+                                <span id="calibFloorName">3F</span> 既有累計基準 (不含本次)
+                            </label>
+                            <input type="number" id="baseFloorInput" min="0" value="0" onchange="updateBaseStats()" class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-amber-900 mb-1">
+                                整棟既有累計基準 (不含本次)
+                            </label>
+                            <input type="number" id="baseBuildingInput" min="0" value="0" onchange="updateBaseStats()" class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800">
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- 右側/下方：即時文字預覽、複製與本週統計 (佔 5 欄) -->
+        <div class="lg:col-span-5 space-y-6">
+            
+            <!-- 即時生成與一鍵複製卡片 -->
+            <section class="bg-gradient-to-br from-slate-800 to-slate-900 text-white rounded-2xl shadow-lg p-5 relative overflow-hidden">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-xs font-semibold uppercase tracking-wider text-blue-300 flex items-center">
+                        <i class="fa-solid fa-wand-magic-sparkles mr-1.5"></i> 自動生成回報文字
+                    </span>
+                    <span class="text-[11px] bg-slate-700/80 text-slate-300 px-2 py-0.5 rounded">格式：今日 / 本層累計 / 整棟累計</span>
+                </div>
+
+                <!-- 生成文字顯示框 -->
+                <div class="bg-slate-950/60 border border-slate-700/80 rounded-xl p-4 mb-4">
+                    <textarea id="generatedText" rows="2" readonly class="w-full bg-transparent text-lg sm:text-xl font-bold text-amber-300 focus:outline-none resize-none leading-relaxed select-text"></textarea>
+                </div>
+
+                <!-- 數據拆解提示 -->
+                <div class="grid grid-cols-3 gap-2 text-center bg-slate-800/80 rounded-xl p-2.5 mb-4 border border-slate-700/50">
+                    <div>
+                        <div class="text-[11px] text-slate-400">今日完成</div>
+                        <div id="previewToday" class="text-base font-bold text-white">0</div>
+                    </div>
+                    <div class="border-x border-slate-700">
+                        <div class="text-[11px] text-slate-400"><span id="previewFloorLabel">3F</span> 累計</div>
+                        <div id="previewFloorTotal" class="text-base font-bold text-blue-400">0</div>
+                    </div>
+                    <div>
+                        <div class="text-[11px] text-slate-400">整棟累計</div>
+                        <div id="previewBuildingTotal" class="text-base font-bold text-emerald-400">0</div>
+                    </div>
+                </div>
+
+                <!-- 操作按鈕組 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button type="button" onclick="copyReportText()" class="w-full py-3 px-4 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 text-white font-semibold rounded-xl shadow transition flex items-center justify-center space-x-2">
+                        <i class="fa-regular fa-copy"></i>
+                        <span>僅複製文字</span>
+                    </button>
+                    <button type="button" onclick="recordAndCopy()" class="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-900/40 transition flex items-center justify-center space-x-2">
+                        <i class="fa-solid fa-check-double"></i>
+                        <span>記錄進度並複製</span>
+                    </button>
+                </div>
+            </section>
+
+            <!-- 本週施工統計卡片 (週日至週六) -->
+            <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
+                <div class="flex justify-between items-start mb-3">
+                    <div>
+                        <h2 class="text-base font-bold text-slate-800 flex items-center">
+                            <i class="fa-solid fa-calendar-week text-indigo-600 mr-2"></i>
+                            本週完成進度統計
+                        </h2>
+                        <p id="weekRangeDisplay" class="text-xs text-slate-500 mt-0.5">週期：計算中...</p>
+                    </div>
+                    <button type="button" onclick="copyWeeklySummary()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-3 py-1.5 rounded-lg border border-indigo-200 transition flex items-center">
+                        <i class="fa-regular fa-clipboard mr-1"></i> 複製週報
+                    </button>
+                </div>
+
+                <!-- 週統計數據摘要卡 -->
+                <div class="grid grid-cols-2 gap-3 mb-4">
+                    <div class="bg-indigo-50/70 border border-indigo-100 rounded-xl p-3">
+                        <div class="text-xs text-indigo-600 font-medium">本週完成小計</div>
+                        <div class="mt-1 flex items-baseline space-x-1">
+                            <span id="weeklySubtotal" class="text-2xl font-bold text-indigo-900">0</span>
+                            <span class="text-xs text-indigo-700">單元</span>
+                        </div>
+                    </div>
+                    <div class="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
+                        <div class="text-xs text-emerald-600 font-medium">整棟累計完成</div>
+                        <div class="mt-1 flex items-baseline space-x-1">
+                            <span id="weeklyCumulative" class="text-2xl font-bold text-emerald-900">0</span>
+                            <span class="text-xs text-emerald-700">單元</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 本週完成樓層標籤匯總 -->
+                <div class="mb-4">
+                    <div class="text-xs font-semibold text-slate-500 mb-1.5">本週施工樓層涵蓋：</div>
+                    <div id="weeklyFloorsBadges" class="flex flex-wrap gap-1.5 min-h-[28px]">
+                        <span class="text-xs text-slate-400 italic">本週尚無施工紀錄</span>
+                    </div>
+                </div>
+
+                <!-- 本週施工明細列表 -->
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <span class="text-xs font-semibold text-slate-500">本週明細紀錄 (週日~週六)</span>
+                        <button type="button" onclick="toggleConfirmReset()" id="resetTriggerBtn" class="text-[11px] text-rose-500 hover:text-rose-700 underline">
+                            清除全部資料
+                        </button>
+                    </div>
+
+                    <!-- 內嵌式確認刪除提示框 (取代原生 confirm) -->
+                    <div id="resetConfirmBox" class="hidden mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs">
+                        <p class="text-rose-800 font-semibold mb-2">確定要清空所有歷史進度與基準值嗎？此動作無法復原。</p>
+                        <div class="flex space-x-2">
+                            <button type="button" onclick="executeResetAll()" class="px-3 py-1.5 bg-rose-600 text-white font-semibold rounded-lg hover:bg-rose-700">確定清空</button>
+                            <button type="button" onclick="toggleConfirmReset()" class="px-3 py-1.5 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">取消</button>
+                        </div>
+                    </div>
+
+                    <div id="weeklyRecordsList" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                        <!-- 由 JS 動態渲染明細 -->
+                    </div>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <!-- 浮動 Toast 訊息提示框 (取代 alert) -->
+    <div id="toastNotification" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
+        <div class="bg-slate-900/95 text-white px-5 py-3 rounded-full shadow-xl border border-slate-700 flex items-center space-x-2.5 text-sm font-medium">
+            <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400"></i>
+            <span id="toastMessage">已複製到剪貼簿</span>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * 系統狀態與常數定義
+         */
+        const STORAGE_KEY = 'curtain_wall_installation_data_v1';
+
+        // 生成樓層清單: 1F ~ 27F 加上 R1F ~ R3F
+        const FLOORS = [
+            ...Array.from({ length: 27 }, (_, i) => `${i + 1}F`),
+            'R1F', 'R2F', 'R3F'
+        ];
+        const DIRECTIONS = ['東', '西', '南', '北'];
+        const WORK_TYPES = ['P1', 'P2', 'P2前置', 'WW', 'P3', 'P4', 'P5'];
+
+        // 應用程式核心狀態
+        let appState = {
+            selectedFloor: '3F',
+            selectedDirection: '東',
+            selectedType: 'P3',
+            // 儲存結構:
+            // records: [{ id, date: 'YYYY-MM-DD', floor, direction, type, count, timestamp }]
+            // baseFloorCounts: { '3F': 41, ... } (歷史基準校正值)
+            // baseBuildingOffset: 1511 (整棟歷史基準校正差額)
+            records: [],
+            baseFloorCounts: {},
+            baseBuildingOffset: 0
+        };
+
+        /**
+         * 初始化與本地資料載入
+         */
+        function initApp() {
+            loadFromStorage();
+
+            // 設定今日日期為預設值 (考量本地時區)
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            const dateInput = document.getElementById('recordDate');
+            dateInput.value = `${yyyy}-${mm}-${dd}`;
+
+            // 綁定輸入監聽事件
+            document.getElementById('todayCount').addEventListener('input', updatePreview);
+            dateInput.addEventListener('change', () => {
+                renderWeeklyStats();
+                updatePreview();
+            });
+
+            // 渲染所有互動按鈕與畫面
+            renderFloorButtons();
+            renderDirectionButtons();
+            renderTypeButtons();
+            syncCalibrationInputs();
+            updatePreview();
+            renderWeeklyStats();
+        }
+
+        /**
+         * 從 LocalStorage 讀取資料
+         */
+        function loadFromStorage() {
+            try {
+                const raw = localStorage.getItem(STORAGE_KEY);
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    appState.records = Array.isArray(parsed.records) ? parsed.records : [];
+                    appState.baseFloorCounts = parsed.baseFloorCounts || {};
+                    appState.baseBuildingOffset = Number(parsed.baseBuildingOffset) || 0;
+                    if (parsed.lastFloor && FLOORS.includes(parsed.lastFloor)) {
+                        appState.selectedFloor = parsed.lastFloor;
+                    }
+                    if (parsed.lastDirection && DIRECTIONS.includes(parsed.lastDirection)) {
+                        appState.selectedDirection = parsed.lastDirection;
+                    }
+                    if (parsed.lastType && WORK_TYPES.includes(parsed.lastType)) {
+                        appState.selectedType = parsed.lastType;
+                    }
+                }
+            } catch (err) {
+                console.error('讀取本地紀錄失敗:', err);
+            }
+        }
+
+        /**
+         * 儲存資料至 LocalStorage
+         */
+        function saveToStorage() {
+            try {
+                const payload = {
+                    records: appState.records,
+                    baseFloorCounts: appState.baseFloorCounts,
+                    baseBuildingOffset: appState.baseBuildingOffset,
+                    lastFloor: appState.selectedFloor,
+                    lastDirection: appState.selectedDirection,
+                    lastType: appState.selectedType
+                };
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+            } catch (err) {
+                console.error('儲存資料失敗:', err);
+                showToast('儲存空間不足或受限，無法保存紀錄', true);
+            }
+        }
+
+        /**
+         * 渲染樓層按鈕 (1F~27F, R1F~R3F)
+         */
+        function renderFloorButtons() {
+            const container = document.getElementById('floorGrid');
+            container.innerHTML = '';
+
+            FLOORS.forEach(floor => {
+                const isSelected = appState.selectedFloor === floor;
+                const floorRecordedSum = getFloorRecordedSum(floor);
+                const hasData = floorRecordedSum > 0;
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `relative py-2.5 px-1 rounded-xl font-bold text-sm transition-all border ${
+                    isSelected
+                        ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]'
+                        : hasData
+                            ? 'bg-blue-50/70 text-blue-900 border-blue-200 hover:bg-blue-100'
+                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`;
+                btn.innerHTML = `
+                    <span>${floor}</span>
+                    ${hasData && !isSelected ? `<span class="block text-[10px] font-normal text-blue-600 leading-none mt-0.5">${floorRecordedSum}</span>` : ''}
+                `;
+                btn.onclick = () => {
+                    appState.selectedFloor = floor;
+                    document.getElementById('selectedFloorBadge').textContent = `目前選擇：${floor}`;
+                    renderFloorButtons();
+                    syncCalibrationInputs();
+                    updatePreview();
+                };
+                container.appendChild(btn);
+            });
+            document.getElementById('selectedFloorBadge').textContent = `目前選擇：${appState.selectedFloor}`;
+        }
+
+        /**
+         * 渲染方向按鈕 (東西南北)
+         */
+        function renderDirectionButtons() {
+            const container = document.getElementById('directionGroup');
+            container.innerHTML = '';
+
+            DIRECTIONS.forEach(dir => {
+                const isSelected = appState.selectedDirection === dir;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `py-3 rounded-xl font-bold text-base transition-all border ${
+                    isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-md'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`;
+                btn.textContent = `${dir}向`;
+                btn.onclick = () => {
+                    appState.selectedDirection = dir;
+                    renderDirectionButtons();
+                    updatePreview();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        /**
+         * 渲染工項按鈕 (P1, P2, P2前置, P3, P4, P5)
+         */
+        function renderTypeButtons() {
+            const container = document.getElementById('typeGroup');
+            container.innerHTML = '';
+
+            WORK_TYPES.forEach(type => {
+                const isSelected = appState.selectedType === type;
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = `py-2.5 px-2 rounded-xl font-bold text-sm transition-all border ${
+                    isSelected
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-md'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                }`;
+                btn.textContent = type;
+                btn.onclick = () => {
+                    appState.selectedType = type;
+                    renderTypeButtons();
+                    updatePreview();
+                };
+                container.appendChild(btn);
+            });
+        }
+
+        /**
+         * 調整今日完成數量加減按鈕
+         */
+        function adjustCount(delta) {
+            const input = document.getElementById('todayCount');
+            let current = parseInt(input.value, 10) || 0;
+            current = Math.max(1, current + delta);
+            input.value = current;
+            updatePreview();
+        }
+
+        /**
+         * 計算某樓層目前累計完成總數 (系統紀錄 + 歷史基準)
+         */
+        function getFloorRecordedSum(floor) {
+            const recordsSum = appState.records
+                .filter(r => r.floor === floor)
+                .reduce((acc, cur) => acc + cur.count, 0);
+            const base = Number(appState.baseFloorCounts[floor]) || 0;
+            return recordsSum + base;
+        }
+
+        /**
+         * 計算整棟目前累計完成總數 (所有紀錄 + 各樓層歷史基準 + 整棟額外基準)
+         */
+        function getBuildingRecordedSum() {
+            const allRecordsSum = appState.records.reduce((acc, cur) => acc + cur.count, 0);
+            const allFloorBaseSum = Object.values(appState.baseFloorCounts).reduce((acc, val) => acc + (Number(val) || 0), 0);
+            return allRecordsSum + allFloorBaseSum + (Number(appState.baseBuildingOffset) || 0);
+        }
+
+        /**
+         * 開關歷史基準校正面板
+         */
+        function toggleCalibration() {
+            const panel = document.getElementById('calibrationPanel');
+            const chevron = document.getElementById('calibChevron');
+            panel.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+            syncCalibrationInputs();
+        }
+
+        /**
+         * 同步基準值輸入框顯示
+         */
+        function syncCalibrationInputs() {
+            const floor = appState.selectedFloor;
+            document.getElementById('calibFloorName').textContent = floor;
+            document.getElementById('baseFloorInput').value = Number(appState.baseFloorCounts[floor]) || 0;
+            document.getElementById('baseBuildingInput').value = getBuildingRecordedSum();
+        }
+
+        /**
+         * 使用者手動修改歷史基準值時更新計算
+         */
+        function updateBaseStats() {
+            const floor = appState.selectedFloor;
+            const newFloorBase = Math.max(0, parseInt(document.getElementById('baseFloorInput').value, 10) || 0);
+            appState.baseFloorCounts[floor] = newFloorBase;
+
+            // 計算除了整棟額外基準以外的總和
+            const recordsSum = appState.records.reduce((acc, cur) => acc + cur.count, 0);
+            const allFloorBases = Object.values(appState.baseFloorCounts).reduce((acc, val) => acc + (Number(val) || 0), 0);
+            const desiredBuildingTotal = Math.max(recordsSum + allFloorBases, parseInt(document.getElementById('baseBuildingInput').value, 10) || 0);
+
+            appState.baseBuildingOffset = desiredBuildingTotal - (recordsSum + allFloorBases);
+            document.getElementById('baseBuildingInput').value = desiredBuildingTotal;
+
+            saveToStorage();
+            updatePreview();
+            renderWeeklyStats();
+        }
+
+        /**
+         * 即時更新生成文字預覽與數字統計
+         * 格式範例：3F東向P3單元吊裝(3/44/1555)
+         */
+        function updatePreview() {
+            const floor = appState.selectedFloor;
+            const dir = appState.selectedDirection;
+            const type = appState.selectedType;
+            const todayNum = Math.max(0, parseInt(document.getElementById('todayCount').value, 10) || 0);
+
+            // 本層累計 (既有累計 + 本次輸入數量)
+            const currentFloorExisting = getFloorRecordedSum(floor);
+            const projectedFloorTotal = currentFloorExisting + todayNum;
+
+            // 整棟累計 (既有累計 + 本次輸入數量)
+            const currentBuildingExisting = getBuildingRecordedSum();
+            const projectedBuildingTotal = currentBuildingExisting + todayNum;
+
+            // 組合標準敘述字串
+            const formattedString = `${floor}${dir}向${type}單元吊裝(${todayNum}/${projectedFloorTotal}/${projectedBuildingTotal})`;
+
+            document.getElementById('generatedText').value = formattedString;
+            document.getElementById('previewToday').textContent = todayNum;
+            document.getElementById('previewFloorLabel').textContent = floor;
+            document.getElementById('previewFloorTotal').textContent = projectedFloorTotal;
+            document.getElementById('previewBuildingTotal').textContent = projectedBuildingTotal;
+            document.getElementById('headerTotalCount').innerHTML = `${currentBuildingExisting} <span class="text-xs font-normal text-slate-300">單元</span>`;
+        }
+
+        /**
+         * 跨平台複製文字函式 (支援手機與電腦，並包含 execCommand 備援機制)
+         */
+        function copyToClipboard(text, successMsg) {
+            const textarea = document.getElementById('generatedText');
+            const originalVal = textarea.value;
+
+            // 若要複製的文字與 textarea 不同（例如複製週報），暫時替換或建立隱藏元素選取
+            if (text !== originalVal) {
+                const tempInput = document.createElement('textarea');
+                tempInput.value = text;
+                tempInput.style.position = 'fixed';
+                tempInput.style.opacity = '0';
+                document.body.appendChild(tempInput);
+                tempInput.focus();
+                tempInput.select();
+                tempInput.setSelectionRange(0, 99999);
+                try {
+                    document.execCommand('copy');
+                    showToast(successMsg);
+                } catch (e) {
+                    showToast('複製失敗，請手動選取複製', true);
+                }
+                document.body.removeChild(tempInput);
+                return;
+            }
+
+            // 直接選取主文字框並複製 (相容 iOS / Android / 桌面瀏覽器)
+            textarea.focus();
+            textarea.select();
+            textarea.setSelectionRange(0, 99999);
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast(successMsg);
+                } else if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text).then(() => showToast(successMsg));
+                } else {
+                    showToast('請手動長按文字進行複製', true);
+                }
+            } catch (err) {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(text)
+                        .then(() => showToast(successMsg))
+                        .catch(() => showToast('複製失敗，請手動選取複製', true));
+                } else {
+                    showToast('複製失敗，請手動選取複製', true);
+                }
+            }
+        }
+
+        /**
+         * 僅複製目前文字
+         */
+        function copyReportText() {
+            const text = document.getElementById('generatedText').value;
+            copyToClipboard(text, '已複製回報文字！可直接貼上');
+        }
+
+        /**
+         * 記錄本筆進度至資料庫，並自動複製文字
+         */
+        function recordAndCopy() {
+            const todayNum = parseInt(document.getElementById('todayCount').value, 10) || 0;
+            if (todayNum <= 0) {
+                showToast('請輸入大於 0 的完成數量', true);
+                return;
+            }
+
+            // 先取得包含本次數量的完整文字並複製
+            const finalReportText = document.getElementById('generatedText').value;
+            copyToClipboard(finalReportText, '已記錄進度並複製文字！');
+
+            const recordDate = document.getElementById('recordDate').value || getTodayDateStr();
+
+            // 寫入紀錄
+            appState.records.unshift({
+                id: Date.now().toString(),
+                date: recordDate,
+                floor: appState.selectedFloor,
+                direction: appState.selectedDirection,
+                type: appState.selectedType,
+                count: todayNum,
+                reportText: finalReportText,
+                timestamp: Date.now()
+            });
+
+            saveToStorage();
+            renderFloorButtons();
+            syncCalibrationInputs();
+            updatePreview();
+            renderWeeklyStats();
+        }
+
+        /**
+         * 取得指定日期所屬的「週日 ~ 週六」區間
+         */
+        function getWeekBounds(dateStr) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const target = new Date(y, m - 1, d);
+            const dayOfWeek = target.getDay(); // 0 (週日) ~ 6 (週六)
+
+            const sunday = new Date(target);
+            sunday.setDate(target.getDate() - dayOfWeek);
+            sunday.setHours(0, 0, 0, 0);
+
+            const saturday = new Date(sunday);
+            saturday.setDate(sunday.getDate() + 6);
+            saturday.setHours(23, 59, 59, 999);
+
+            return { sunday, saturday };
+        }
+
+        /**
+         * 格式化日期顯示 (MM/DD)
+         */
+        function formatShortDate(dateObj) {
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${m}/${d}`;
+        }
+
+        function getTodayDateStr() {
+            const now = new Date();
+            return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        }
+
+        /**
+         * 渲染本週 (週日至週六) 統計資訊與明細
+         */
+        function renderWeeklyStats() {
+            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const { sunday, saturday } = getWeekBounds(selectedDateStr);
+
+            document.getElementById('weekRangeDisplay').textContent =
+                `統計週期：${formatShortDate(sunday)} (週日) ~ ${formatShortDate(saturday)} (週六)`;
+
+            // 篩選出落在本週區間內的紀錄
+            const weeklyRecords = appState.records.filter(rec => {
+                const [ry, rm, rd] = rec.date.split('-').map(Number);
+                const recDate = new Date(ry, rm - 1, rd, 12, 0, 0);
+                return recDate >= sunday && recDate <= saturday;
+            });
+
+            // 計算本週小計
+            const weeklySubtotal = weeklyRecords.reduce((sum, r) => sum + r.count, 0);
+            const totalCumulative = getBuildingRecordedSum();
+
+            document.getElementById('weeklySubtotal').textContent = weeklySubtotal;
+            document.getElementById('weeklyCumulative').textContent = totalCumulative;
+
+            // 統計本週完成哪些樓層 (按樓層順序排列並顯示各樓層本週小計)
+            const floorMap = {};
+            weeklyRecords.forEach(r => {
+                floorMap[r.floor] = (floorMap[r.floor] || 0) + r.count;
+            });
+
+            const sortedFloors = Object.keys(floorMap).sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
+            const badgesContainer = document.getElementById('weeklyFloorsBadges');
+
+            if (sortedFloors.length === 0) {
+                badgesContainer.innerHTML = `<span class="text-xs text-slate-400 italic">此週期尚無施工紀錄</span>`;
+            } else {
+                badgesContainer.innerHTML = sortedFloors.map(fl => `
+                    <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
+                        ${fl} <span class="ml-1 text-indigo-600 font-normal">(${floorMap[fl]}單元)</span>
+                    </span>
+                `).join('');
+            }
+
+            // 渲染本週明細列表
+            const listContainer = document.getElementById('weeklyRecordsList');
+            if (weeklyRecords.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
+                        點擊上方「記錄進度並複製」後，明細將自動累計於此
+                    </div>
+                `;
+            } else {
+                listContainer.innerHTML = weeklyRecords.map(rec => `
+                    <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200/80 transition">
+                        <div class="min-w-0 pr-2">
+                            <div class="text-xs font-bold text-slate-800 truncate">
+                                ${rec.floor}${rec.direction}向${rec.type}單元吊裝
+                                <span class="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[11px]">+${rec.count}</span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">${rec.date}</div>
+                        </div>
+                        <button type="button" onclick="deleteRecord('${rec.id}')" title="刪除此筆紀錄" class="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        /**
+         * 一鍵複製本週週報摘要
+         */
+        function copyWeeklySummary() {
+            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const { sunday, saturday } = getWeekBounds(selectedDateStr);
+            const weeklyRecords = appState.records.filter(rec => {
+                const [ry, rm, rd] = rec.date.split('-').map(Number);
+                const recDate = new Date(ry, rm - 1, rd, 12, 0, 0);
+                return recDate >= sunday && recDate <= saturday;
+            });
+
+            const weeklySubtotal = weeklyRecords.reduce((sum, r) => sum + r.count, 0);
+            const totalCumulative = getBuildingRecordedSum();
+
+            const floorMap = {};
+            weeklyRecords.forEach(r => {
+                floorMap[r.floor] = (floorMap[r.floor] || 0) + r.count;
+            });
+            const sortedFloors = Object.keys(floorMap).sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
+            const floorSummaryStr = sortedFloors.length > 0
+                ? sortedFloors.map(f => `${f}(${floorMap[f]})`).join('、')
+                : '無';
+
+            const summaryText = `【本週單元吊裝進度統計】\n週期：${formatShortDate(sunday)}(日)~${formatShortDate(saturday)}(六)\n完成樓層：${floorSummaryStr}\n本週完成小計：${weeklySubtotal} 單元\n整棟累計完成：${totalCumulative} 單元`;
+
+            copyToClipboard(summaryText, '已複製本週進度統計週報！');
+        }
+
+        /**
+         * 刪除單筆紀錄
+         */
+        function deleteRecord(id) {
+            appState.records = appState.records.filter(r => r.id !== id);
+            saveToStorage();
+            renderFloorButtons();
+            syncCalibrationInputs();
+            updatePreview();
+            renderWeeklyStats();
+            showToast('已刪除該筆紀錄並重新計算累計');
+        }
+
+        /**
+         * 切換清除全部資料的確認提示框
+         */
+        function toggleConfirmReset() {
+            const box = document.getElementById('resetConfirmBox');
+            box.classList.toggle('hidden');
+        }
+
+        /**
+         * 執行清空所有資料
+         */
+        function executeResetAll() {
+            appState.records = [];
+            appState.baseFloorCounts = {};
+            appState.baseBuildingOffset = 0;
+            saveToStorage();
+            toggleConfirmReset();
+            renderFloorButtons();
+            syncCalibrationInputs();
+            updatePreview();
+            renderWeeklyStats();
+            showToast('已清空所有進度與基準資料');
+        }
+
+        /**
+         * 顯示底部提示訊息 (Toast)
+         */
+        let toastTimer = null;
+        function showToast(message, isWarning = false) {
+            const toast = document.getElementById('toastNotification');
+            const msgEl = document.getElementById('toastMessage');
+            const iconEl = document.getElementById('toastIcon');
+
+            msgEl.textContent = message;
+            iconEl.className = isWarning
+                ? 'fa-solid fa-circle-exclamation text-amber-400'
+                : 'fa-solid fa-circle-check text-emerald-400';
+
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            if (toastTimer) clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 2600);
+        }
+
+        // 啟動應用程式
+        window.addEventListener('DOMContentLoaded', initApp);
+    </script>
+</body>
+</html>
