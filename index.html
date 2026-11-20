@@ -296,13 +296,31 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // =========================================================================
+        // 【雲端同步設定區】部署至 GitHub Pages 時，請將 Firebase 申請到的 6 行設定貼在下方
+        // =========================================================================
+        const CUSTOM_FIREBASE_CONFIG = {
+            apiKey: "",
+            authDomain: "",
+            projectId: "",
+            storageBucket: "",
+            messagingSenderId: "",
+            appId: ""
+        };
+        // =========================================================================
+
         /**
          * 系統狀態與常數定義
          */
         const BUILDING_TARGET_TOTAL = 2707;
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+        const hasCustomConfig = Boolean(CUSTOM_FIREBASE_CONFIG.apiKey && CUSTOM_FIREBASE_CONFIG.projectId);
+        const appId = hasCustomConfig
+            ? 'unit-installation-tracker'
+            : (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id');
+        const firebaseConfig = hasCustomConfig
+            ? CUSTOM_FIREBASE_CONFIG
+            : (typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null);
+        const initialAuthToken = (!hasCustomConfig && typeof __initial_auth_token !== 'undefined') ? __initial_auth_token : null;
 
         // 生成樓層清單: 1F ~ 27F 加上 R1F ~ R3F
         const FLOORS = [
@@ -400,8 +418,8 @@
 
             // 啟動雲端資料庫連線
             if (!firebaseConfig) {
-                setSyncStatus('error', '未偵測到雲端設定，目前為預覽模式');
-                document.getElementById('displayUserId').textContent = '離線模式';
+                setSyncStatus('error', '離線模式：請於程式碼填入 Firebase 金鑰');
+                document.getElementById('displayUserId').textContent = '未設定雲端金鑰';
                 return;
             }
 
@@ -428,8 +446,13 @@
                 });
             } catch (err) {
                 console.error('雲端初始化失敗:', err);
-                setSyncStatus('error', '雲端連線失敗，請重新整理');
-                showToast('雲端連線失敗，請檢查網路狀態', true);
+                if (err.code === 'auth/operation-not-allowed') {
+                    setSyncStatus('error', '請至 Firebase 後台開啟「匿名登入」');
+                    showToast('請至 Firebase Authentication 開啟匿名登入', true);
+                } else {
+                    setSyncStatus('error', '雲端連線失敗，請檢查金鑰與網路');
+                    showToast('雲端連線失敗，請檢查 Firebase 設定', true);
+                }
             }
         }
 
@@ -467,6 +490,10 @@
                 }
             } catch (err) {
                 console.error('初始化雲端基準資料失敗:', err);
+                if (err.code === 'permission-denied') {
+                    setSyncStatus('error', '權限不足：請檢查 Firestore 安全規則');
+                    showToast('權限不足，請確認已發布 Firestore 規則', true);
+                }
             }
         }
 
@@ -496,7 +523,7 @@
                 },
                 (err) => {
                     console.error('基準設定同步錯誤:', err);
-                    setSyncStatus('error', '雲端同步異常');
+                    setSyncStatus('error', '雲端同步異常 (請檢查規則權限)');
                 }
             );
 
@@ -790,7 +817,7 @@
                 return;
             }
             if (!currentUser) {
-                showToast('雲端連線尚未就緒，請稍候再試', true);
+                showToast('雲端連線尚未就緒，請確認已完成 Firebase 設定', true);
                 return;
             }
 
