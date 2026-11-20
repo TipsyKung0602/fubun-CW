@@ -302,7 +302,7 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // =========================================================================
         // 【雲端同步設定區】部署至 GitHub Pages 時，請將 Firebase 申請到的 6 行設定貼在下方
@@ -316,6 +316,503 @@
   appId: "1:330897228974:web:8ecbab21e0e81e238a593f"
         };
         // =========================================================================
+
+        // 樓層、方向與工項常數設定
+        const FLOORS = [
+            ...Array.from({ length: 27 }, (_, i) => `${i + 1}F`),
+            'R1F', 'R2F', 'R3F'
+        ];
+        const DIRECTIONS = ['東', '西', '南', '北'];
+        const WORK_TYPES = ['P1', 'P2', 'P2前置', 'WW', 'P3', 'P4', 'P5'];
+
+        // 各樓層目標總數量 (整棟總計 2,707 樘)
+        const FLOOR_TARGET_TOTALS = {
+            '1F': 47, '2F': 58, '3F': 94, '4F': 94, '5F': 94,
+            '6F': 94, '7F': 94, '8F': 94, '9F': 94, '10F': 94,
+            '11F': 94, '12F': 94, '13F': 94, '14F': 94, '15F': 94,
+            '16F': 94, '17F': 106, '18F': 94, '19F': 106, '20F': 106,
+            '21F': 106, '22F': 106, '23F': 106, '24F': 106, '25F': 106,
+            '26F': 106, '27F': 106, 'R1F': 44, 'R2F': 44, 'R3F': 44
+        };
+        const BUILDING_TARGET_TOTAL = Object.values(FLOOR_TARGET_TOTALS).reduce((a, b) => a + b, 0); // 2,707
+
+        // 歷史基準值 (不含 INITIAL_WEEKLY_HISTORY 27 樘，加總為 1,815 + 27 = 1,842 樘)
+        const INITIAL_BASE_FLOOR_COUNTS = {
+            '1F': 33, '2F': 35, '3F': 60, '4F': 60, '5F': 70,
+            '6F': 82, '7F': 82, '8F': 82, '9F': 82, '10F': 82,
+            '11F': 82, '12F': 82, '13F': 82, '14F': 82, '15F': 82,
+            '16F': 82, '17F': 88, '18F': 76, '19F': 82, '20F': 87,
+            '21F': 82, '22F': 77, '23F': 49, '24F': 38, '25F': 38,
+            '26F': 19, '27F': 19, 'R1F': 0, 'R2F': 0, 'R3F': 0
+        };
+
+        // 本週既定施工明細 (合計 27 樘)
+        const INITIAL_WEEKLY_HISTORY = [
+            { date: '2026-11-16', floor: '17F', direction: '東', type: 'P2', count: 6 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P2前置', count: 2 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P2前置', count: 2 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P5', count: 11 },
+            { date: '2026-11-19', floor: '18F', direction: '東', type: 'P2', count: 6 }
+        ];
+
+        const LOCAL_STORAGE_KEY = 'unit_tracker_offline_v2';
+
+        // 應用程式狀態
+        let appState = {
+            selectedFloor: '18F',
+            selectedDirection: '東',
+            selectedType: 'P2',
+            baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
+            baseBuildingOffset: 0,
+            records: INITIAL_WEEKLY_HISTORY.map((item, idx) => ({
+                id: `local_init_${idx + 1}`,
+                ...item,
+                isHistoricalImport: false,
+                timestamp: new Date(item.date).getTime() + idx
+            }))
+        };
+
+        // Firebase 相關變數
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let isOfflineMode = true;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'unit-installation-tracker';
+
+        function getConfigDocRef() {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'tracker_config', 'main');
+        }
+
+        function getRecordsCollectionRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'tracker_records');
+        }
+
+        function setSyncStatus(status, text) {
+            const dot = document.getElementById('syncStatusDot');
+            const label = document.getElementById('syncStatusText');
+            if (!dot || !label) return;
+
+            label.textContent = text;
+            if (status === 'online') {
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+            } else if (status === 'connecting') {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-slate-400';
+            }
+        }
+
+        function loadLocalFallback() {
+            try {
+                const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+                if (saved) {
+                    const parsed = JSON.parse(saved);
+                    if (parsed.baseFloorCounts) appState.baseFloorCounts = parsed.baseFloorCounts;
+                    if (typeof parsed.baseBuildingOffset === 'number') appState.baseBuildingOffset = parsed.baseBuildingOffset;
+                    if (Array.isArray(parsed.records)) appState.records = parsed.records;
+                }
+            } catch (e) {
+                console.warn('讀取本機快取失敗:', e);
+            }
+        }
+
+        function saveLocalFallback() {
+            try {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({
+                    baseFloorCounts: appState.baseFloorCounts,
+                    baseBuildingOffset: appState.baseBuildingOffset,
+                    records: appState.records
+                }));
+            } catch (e) {
+                console.warn('儲存本機快取失敗:', e);
+            }
+        }
+
+        function getTodayDateStr() {
+            const now = new Date();
+            const y = now.getFullYear();
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const d = String(now.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function formatShortDate(dateObj) {
+            const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+            const d = String(dateObj.getDate()).padStart(2, '0');
+            return `${m}/${d}`;
+        }
+
+        function getFloorRecordedSum(floor) {
+            const base = Number(appState.baseFloorCounts[floor] || 0);
+            const recSum = appState.records
+                .filter(r => r.floor === floor)
+                .reduce((sum, r) => sum + Number(r.count || 0), 0);
+            return base + recSum;
+        }
+
+        function getBuildingRecordedSum() {
+            const baseSum = Object.values(appState.baseFloorCounts).reduce((a, b) => a + Number(b || 0), 0);
+            const recSum = appState.records.reduce((sum, r) => sum + Number(r.count || 0), 0);
+            return baseSum + recSum + Number(appState.baseBuildingOffset || 0);
+        }
+
+        function renderSelectionButtons() {
+            // 1. 樓層按鈕
+            const floorGrid = document.getElementById('floorGrid');
+            floorGrid.innerHTML = FLOORS.map(fl => {
+                const cur = getFloorRecordedSum(fl);
+                const target = FLOOR_TARGET_TOTALS[fl] || 0;
+                const isSelected = appState.selectedFloor === fl;
+                const isDone = target > 0 && cur >= target;
+
+                let btnClass = 'py-2 px-1.5 rounded-xl border text-center transition flex flex-col items-center justify-center ';
+                if (isSelected) {
+                    btnClass += 'bg-blue-600 border-blue-600 text-white shadow-sm ring-2 ring-blue-300';
+                } else if (isDone) {
+                    btnClass += 'bg-emerald-50/80 border-emerald-200 text-emerald-800 hover:bg-emerald-100';
+                } else {
+                    btnClass += 'bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100';
+                }
+
+                const subTextClass = isSelected ? 'text-blue-100' : (isDone ? 'text-emerald-600 font-semibold' : 'text-slate-400');
+
+                return `
+                    <button type="button" onclick="selectFloor('${fl}')" class="${btnClass}">
+                        <span class="text-xs sm:text-sm font-bold leading-tight">${fl}</span>
+                        <span class="text-[10px] mt-0.5 ${subTextClass}">${cur}/${target}</span>
+                    </button>
+                `;
+            }).join('');
+
+            const selCur = getFloorRecordedSum(appState.selectedFloor);
+            const selTarget = FLOOR_TARGET_TOTALS[appState.selectedFloor] || 0;
+            document.getElementById('selectedFloorBadge').textContent = `目前選擇：${appState.selectedFloor} (${selCur}/${selTarget})`;
+
+            // 2. 方向按鈕
+            const dirGroup = document.getElementById('directionGroup');
+            dirGroup.innerHTML = DIRECTIONS.map(dir => {
+                const isSelected = appState.selectedDirection === dir;
+                const btnClass = isSelected
+                    ? 'py-2.5 rounded-xl bg-blue-600 border border-blue-600 text-white font-bold shadow-sm'
+                    : 'py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold hover:bg-slate-100';
+                return `<button type="button" onclick="selectDirection('${dir}')" class="${btnClass}">${dir}向</button>`;
+            }).join('');
+
+            // 3. 工項按鈕
+            const typeGroup = document.getElementById('typeGroup');
+            typeGroup.innerHTML = WORK_TYPES.map(wt => {
+                const isSelected = appState.selectedType === wt;
+                const btnClass = isSelected
+                    ? 'py-2.5 px-2 rounded-xl bg-blue-600 border border-blue-600 text-white font-bold text-sm shadow-sm'
+                    : 'py-2.5 px-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-100';
+                return `<button type="button" onclick="selectType('${wt}')" class="${btnClass}">${wt}</button>`;
+            }).join('');
+        }
+
+        function updatePreview() {
+            const countVal = Math.max(0, parseInt(document.getElementById('todayCount').value, 10) || 0);
+            const fl = appState.selectedFloor;
+            const dir = appState.selectedDirection;
+            const wt = appState.selectedType;
+
+            const currentFloorSum = getFloorRecordedSum(fl);
+            const currentBuildingSum = getBuildingRecordedSum();
+            const floorTarget = FLOOR_TARGET_TOTALS[fl] || 0;
+
+            const nextFloorSum = currentFloorSum + countVal;
+            const nextBuildingSum = currentBuildingSum + countVal;
+
+            const text = `${fl}${dir}向${wt}單元吊裝(${countVal}/${nextFloorSum}/${nextBuildingSum})`;
+            document.getElementById('generatedText').value = text;
+
+            document.getElementById('previewToday').textContent = countVal;
+            document.getElementById('previewFloorLabel').textContent = fl;
+            document.getElementById('previewFloorTotal').textContent = `${nextFloorSum} / ${floorTarget}`;
+            document.getElementById('previewBuildingTotal').textContent = nextBuildingSum.toLocaleString();
+
+            document.getElementById('headerTotalCount').innerHTML = `${currentBuildingSum.toLocaleString()} <span class="text-xs font-normal text-slate-300">/ ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘</span>`;
+
+            // 同步更新校正欄位的目前樓層顯示
+            document.getElementById('calibFloorName').textContent = fl;
+            document.getElementById('baseFloorInput').value = appState.baseFloorCounts[fl] || 0;
+            document.getElementById('baseBuildingInput').value = appState.baseBuildingOffset || 0;
+        }
+
+        function getWeeklyData() {
+            const dateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const [y, m, d] = dateStr.split('-').map(Number);
+            const selectedDate = new Date(y, m - 1, d);
+            const dayOfWeek = selectedDate.getDay(); // 0 (週日) ~ 6 (週六)
+
+            const sunday = new Date(selectedDate);
+            sunday.setDate(selectedDate.getDate() - dayOfWeek);
+
+            const saturday = new Date(sunday);
+            saturday.setDate(sunday.getDate() + 6);
+
+            const toYMD = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+            const sunStr = toYMD(sunday);
+            const satStr = toYMD(saturday);
+
+            const weeklyRecords = appState.records
+                .filter(r => r.date >= sunStr && r.date <= satStr)
+                .sort((a, b) => a.date.localeCompare(b.date) || (a.timestamp || 0) - (b.timestamp || 0));
+
+            const weeklySubtotal = weeklyRecords.reduce((sum, r) => sum + Number(r.count || 0), 0);
+            const totalCumulative = getBuildingRecordedSum();
+
+            return { sunday, saturday, sunStr, satStr, weeklyRecords, weeklySubtotal, totalCumulative };
+        }
+
+        function renderWeeklyStats() {
+            const { sunday, saturday, weeklyRecords, weeklySubtotal, totalCumulative } = getWeeklyData();
+
+            document.getElementById('weekRangeDisplay').textContent = `週期：${formatShortDate(sunday)}(日) ~ ${formatShortDate(saturday)}(六)`;
+            document.getElementById('weeklySubtotal').textContent = weeklySubtotal.toLocaleString();
+            document.getElementById('weeklyCumulative').textContent = totalCumulative.toLocaleString();
+
+            // 樓層標籤
+            const floorsSet = [...new Set(weeklyRecords.map(r => r.floor))]
+                .sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
+            const badgesContainer = document.getElementById('weeklyFloorsBadges');
+            if (floorsSet.length > 0) {
+                badgesContainer.innerHTML = floorsSet.map(fl => {
+                    const flWeekSum = weeklyRecords.filter(r => r.floor === fl).reduce((s, r) => s + r.count, 0);
+                    return `<span class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-semibold">${fl} (+${flWeekSum})</span>`;
+                }).join('');
+            } else {
+                badgesContainer.innerHTML = `<span class="text-xs text-slate-400 italic">本週尚無施工紀錄</span>`;
+            }
+
+            // 明細列表
+            const listEl = document.getElementById('weeklyRecordsList');
+            if (weeklyRecords.length === 0) {
+                listEl.innerHTML = `<div class="text-center py-6 text-xs text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">此週期尚無吊裝紀錄</div>`;
+            } else {
+                listEl.innerHTML = weeklyRecords.map(r => {
+                    const shortDt = r.date.slice(5).replace('-', '/');
+                    return `
+                        <div class="flex items-center justify-between bg-slate-50 hover:bg-slate-100/80 border border-slate-200/80 rounded-xl px-3 py-2 text-xs transition">
+                            <div class="flex items-center space-x-2">
+                                <span class="font-mono text-slate-500 bg-white px-1.5 py-0.5 rounded border border-slate-200">${shortDt}</span>
+                                <span class="font-bold text-slate-800">${r.floor}${r.direction}向${r.type}</span>
+                                <span class="text-blue-600 font-bold">+${r.count} 樘</span>
+                            </div>
+                            <button type="button" onclick="deleteRecord('${r.id}')" title="刪除此筆紀錄" class="text-slate-400 hover:text-rose-600 p-1 transition">
+                                <i class="fa-regular fa-trash-can"></i>
+                            </button>
+                        </div>
+                    `;
+                }).join('');
+            }
+        }
+
+        function refreshAllUI() {
+            renderSelectionButtons();
+            updatePreview();
+            renderWeeklyStats();
+        }
+
+        function selectFloor(fl) {
+            appState.selectedFloor = fl;
+            refreshAllUI();
+        }
+
+        function selectDirection(dir) {
+            appState.selectedDirection = dir;
+            refreshAllUI();
+        }
+
+        function selectType(wt) {
+            appState.selectedType = wt;
+            refreshAllUI();
+        }
+
+        function adjustCount(delta) {
+            const input = document.getElementById('todayCount');
+            const cur = parseInt(input.value, 10) || 0;
+            const next = Math.max(1, cur + delta);
+            input.value = next;
+            updatePreview();
+        }
+
+        function toggleCalibration() {
+            const panel = document.getElementById('calibrationPanel');
+            const chevron = document.getElementById('calibChevron');
+            panel.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        async function updateBaseStats() {
+            const fl = appState.selectedFloor;
+            const newFloorBase = Math.max(0, parseInt(document.getElementById('baseFloorInput').value, 10) || 0);
+            const newBuildingOffset = parseInt(document.getElementById('baseBuildingInput').value, 10) || 0;
+
+            appState.baseFloorCounts[fl] = newFloorBase;
+            appState.baseBuildingOffset = newBuildingOffset;
+            refreshAllUI();
+
+            if (!isOfflineMode && currentUser) {
+                try {
+                    await setDoc(getConfigDocRef(), {
+                        baseFloorCounts: appState.baseFloorCounts,
+                        baseBuildingOffset: appState.baseBuildingOffset,
+                        initialized: true,
+                        updatedAt: Date.now()
+                    }, { merge: true });
+                    showToast('已更新並同步歷史基準值');
+                } catch (err) {
+                    console.error('更新雲端基準值失敗:', err);
+                    showToast('雲端同步基準值失敗', true);
+                }
+            } else {
+                saveLocalFallback();
+                showToast('已更新本機歷史基準值');
+            }
+        }
+
+        function copyToClipboard(text, successMsg) {
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast(successMsg);
+                }).catch(() => {
+                    fallbackCopyText(text, successMsg);
+                });
+            } else {
+                fallbackCopyText(text, successMsg);
+            }
+        }
+
+        function fallbackCopyText(text, successMsg) {
+            const tempArea = document.createElement('textarea');
+            tempArea.value = text;
+            tempArea.style.position = 'fixed';
+            tempArea.style.left = '-9999px';
+            document.body.appendChild(tempArea);
+            tempArea.select();
+            try {
+                document.execCommand('copy');
+                showToast(successMsg);
+            } catch (err) {
+                showToast('複製失敗，請手動選取文字複製', true);
+            }
+            document.body.removeChild(tempArea);
+        }
+
+        function copyReportText() {
+            const text = document.getElementById('generatedText').value;
+            copyToClipboard(text, `已複製：${text}`);
+        }
+
+        async function recordAndCopy() {
+            const countVal = parseInt(document.getElementById('todayCount').value, 10) || 0;
+            if (countVal <= 0) {
+                showToast('請輸入大於 0 的完成數量', true);
+                return;
+            }
+
+            const dateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const reportText = document.getElementById('generatedText').value;
+            const newRecord = {
+                date: dateStr,
+                floor: appState.selectedFloor,
+                direction: appState.selectedDirection,
+                type: appState.selectedType,
+                count: countVal,
+                isHistoricalImport: false,
+                timestamp: Date.now()
+            };
+
+            copyToClipboard(reportText, `已記錄並複製：${reportText}`);
+
+            if (!isOfflineMode && currentUser) {
+                try {
+                    const recId = `rec_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+                    await setDoc(doc(getRecordsCollectionRef(), recId), {
+                        ...newRecord,
+                        createdBy: currentUser.uid
+                    });
+                } catch (err) {
+                    console.error('寫入雲端紀錄失敗:', err);
+                    showToast('雲端寫入失敗，請檢查網路或權限', true);
+                }
+            } else {
+                appState.records.push({
+                    id: `local_${Date.now()}`,
+                    ...newRecord
+                });
+                saveLocalFallback();
+                refreshAllUI();
+            }
+        }
+
+        async function deleteRecord(recordId) {
+            if (!isOfflineMode && currentUser) {
+                try {
+                    await deleteDoc(doc(getRecordsCollectionRef(), recordId));
+                    showToast('已刪除該筆進度紀錄');
+                } catch (err) {
+                    console.error('刪除雲端紀錄失敗:', err);
+                    showToast('刪除失敗，請稍後再試', true);
+                }
+            } else {
+                appState.records = appState.records.filter(r => r.id !== recordId);
+                saveLocalFallback();
+                refreshAllUI();
+                showToast('已刪除該筆進度紀錄');
+            }
+        }
+
+        /**
+         * 複製當日進度日報摘要 (含底部依樓層+工項分組之格式化明細)
+         */
+        function copyDailySummary() {
+            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const dailyRecords = appState.records.filter(r => r.date === selectedDateStr);
+            const dailySubtotal = dailyRecords.reduce((sum, r) => sum + r.count, 0);
+            const totalCumulative = getBuildingRecordedSum();
+            const progressPct = ((totalCumulative / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
+
+            const mainLines = dailyRecords.length > 0
+                ? dailyRecords.map(r => `・${r.floor}${r.direction}向${r.type}單元吊裝 +${r.count} 樘`).join('\n')
+                : '・無施工紀錄';
+
+            // 依「樓層 + 工項」分組加總當日完成數量
+            const floorTypeGrouped = {};
+            dailyRecords.forEach(r => {
+                const key = `${r.floor}__${r.type}`;
+                if (!floorTypeGrouped[key]) {
+                    floorTypeGrouped[key] = { floor: r.floor, type: r.type, count: 0 };
+                }
+                floorTypeGrouped[key].count += r.count;
+            });
+
+            const sortedBottomGroups = Object.values(floorTypeGrouped).sort((a, b) => {
+                const floorDiff = FLOORS.indexOf(a.floor) - FLOORS.indexOf(b.floor);
+                if (floorDiff !== 0) return floorDiff;
+                return WORK_TYPES.indexOf(a.type) - WORK_TYPES.indexOf(b.type);
+            });
+
+            const bottomDetailLines = sortedBottomGroups.length > 0
+                ? sortedBottomGroups.map(item => {
+                    const floorDisplay = item.floor.replace(/F$/i, '樓');
+                    const flCum = getFloorRecordedSum(item.floor);
+                    return `${floorDisplay}${item.type}單元吊裝(當日吊裝/當層已完成數量/總完成：${item.count}/${flCum}/${totalCumulative})`;
+                }).join('\n')
+                : '當日無吊裝明細';
+
+            const summaryText = [
+                `【${selectedDateStr.replace(/-/g, '/')} 單元吊裝進度日報】`,
+                `當日施工明細：`,
+                mainLines,
+                `當日完成小計：${dailySubtotal} 樘`,
+                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`,
+                `=======================================`,
+                bottomDetailLines
+            ].join('\n');
+
+            copyToClipboard(summaryText, `已複製 ${selectedDateStr} 進度日報！`);
+        }
 
         /**
          * 將明細依「樓層 + 方向 + 工項」分組加總並依樓層順序排列，供週報與月報使用
@@ -421,46 +918,56 @@
          * 執行清空雲端新增紀錄並恢復至初始各樓層與本週數據 (同步所有裝置)
          */
         async function executeResetAll() {
-            if (!currentUser) {
-                showToast('雲端連線尚未就緒，請稍候再試', true);
-                return;
-            }
-            try {
-                const recordsCol = getRecordsCollectionRef();
-                const snapshot = await getDocs(recordsCol);
-                const deletePromises = [];
-                snapshot.forEach((docSnap) => {
-                    deletePromises.push(deleteDoc(doc(recordsCol, docSnap.id)));
-                });
-                await Promise.all(deletePromises);
-
-                // 重新寫入初始基準與本週 5 筆既定紀錄
-                await setDoc(getConfigDocRef(), {
-                    baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
-                    baseBuildingOffset: 0,
-                    initialized: true,
-                    updatedAt: Date.now()
-                });
-
-                const seedPromises = INITIAL_WEEKLY_HISTORY.map((item, idx) => {
-                    return setDoc(doc(recordsCol, `init_week_${idx + 1}`), {
-                        date: item.date,
-                        floor: item.floor,
-                        direction: item.direction,
-                        type: item.type,
-                        count: item.count,
-                        isHistoricalImport: false,
-                        createdBy: currentUser.uid,
-                        timestamp: new Date(item.date).getTime() + idx
+            if (!isOfflineMode && currentUser) {
+                try {
+                    const recordsCol = getRecordsCollectionRef();
+                    const snapshot = await getDocs(recordsCol);
+                    const deletePromises = [];
+                    snapshot.forEach((docSnap) => {
+                        deletePromises.push(deleteDoc(doc(recordsCol, docSnap.id)));
                     });
-                });
-                await Promise.all(seedPromises);
+                    await Promise.all(deletePromises);
 
+                    await setDoc(getConfigDocRef(), {
+                        baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
+                        baseBuildingOffset: 0,
+                        initialized: true,
+                        updatedAt: Date.now()
+                    });
+
+                    const seedPromises = INITIAL_WEEKLY_HISTORY.map((item, idx) => {
+                        return setDoc(doc(recordsCol, `init_week_${idx + 1}`), {
+                            date: item.date,
+                            floor: item.floor,
+                            direction: item.direction,
+                            type: item.type,
+                            count: item.count,
+                            isHistoricalImport: false,
+                            createdBy: currentUser.uid,
+                            timestamp: new Date(item.date).getTime() + idx
+                        });
+                    });
+                    await Promise.all(seedPromises);
+
+                    toggleConfirmReset();
+                    showToast(`已恢復至初始數據 (已完成 1,842 / ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘)`);
+                } catch (err) {
+                    console.error('恢復初始資料失敗:', err);
+                    showToast('恢復初始資料失敗，請稍後再試', true);
+                }
+            } else {
+                appState.baseFloorCounts = { ...INITIAL_BASE_FLOOR_COUNTS };
+                appState.baseBuildingOffset = 0;
+                appState.records = INITIAL_WEEKLY_HISTORY.map((item, idx) => ({
+                    id: `local_init_${idx + 1}`,
+                    ...item,
+                    isHistoricalImport: false,
+                    timestamp: new Date(item.date).getTime() + idx
+                }));
+                saveLocalFallback();
+                refreshAllUI();
                 toggleConfirmReset();
                 showToast(`已恢復至初始數據 (已完成 1,842 / ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘)`);
-            } catch (err) {
-                console.error('恢復初始資料失敗:', err);
-                showToast('恢復初始資料失敗，請稍後再試', true);
             }
         }
 
@@ -488,7 +995,127 @@
             }, 2600);
         }
 
+        /**
+         * 初始化應用程式與雲端/離線連線
+         */
+        async function initApp() {
+            const dateInput = document.getElementById('recordDate');
+            dateInput.value = getTodayDateStr();
+            dateInput.addEventListener('change', refreshAllUI);
+
+            const countInput = document.getElementById('todayCount');
+            countInput.addEventListener('input', updatePreview);
+
+            // 檢查 Firebase 設定來源
+            let firebaseConfig = null;
+            if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+                try {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } catch (e) {
+                    console.warn('解析環境 Firebase 設定失敗');
+                }
+            }
+            if (!firebaseConfig && CUSTOM_FIREBASE_CONFIG && CUSTOM_FIREBASE_CONFIG.apiKey) {
+                firebaseConfig = CUSTOM_FIREBASE_CONFIG;
+            }
+
+            if (!firebaseConfig || !firebaseConfig.apiKey) {
+                isOfflineMode = true;
+                loadLocalFallback();
+                setSyncStatus('offline', '離線本機模式 (未設定雲端金鑰)');
+                document.getElementById('displayUserId').textContent = '本機單機模式';
+                refreshAllUI();
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) return;
+                    currentUser = user;
+                    isOfflineMode = false;
+                    document.getElementById('displayUserId').textContent = user.uid;
+                    setSyncStatus('online', '雲端已同步 • 多裝置即時協作');
+
+                    try {
+                        // 檢查是否已完成首次雲端初始化
+                        const configSnap = await getDoc(getConfigDocRef());
+                        if (!configSnap.exists() || !configSnap.data().initialized) {
+                            await setDoc(getConfigDocRef(), {
+                                baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
+                                baseBuildingOffset: 0,
+                                initialized: true,
+                                updatedAt: Date.now()
+                            });
+                            const seedPromises = INITIAL_WEEKLY_HISTORY.map((item, idx) => {
+                                return setDoc(doc(getRecordsCollectionRef(), `init_week_${idx + 1}`), {
+                                    date: item.date,
+                                    floor: item.floor,
+                                    direction: item.direction,
+                                    type: item.type,
+                                    count: item.count,
+                                    isHistoricalImport: false,
+                                    createdBy: user.uid,
+                                    timestamp: new Date(item.date).getTime() + idx
+                                });
+                            });
+                            await Promise.all(seedPromises);
+                        }
+
+                        // 即時監聽設定檔變化
+                        onSnapshot(getConfigDocRef(), (docSnap) => {
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                if (data.baseFloorCounts) appState.baseFloorCounts = data.baseFloorCounts;
+                                if (typeof data.baseBuildingOffset === 'number') appState.baseBuildingOffset = data.baseBuildingOffset;
+                                refreshAllUI();
+                            }
+                        }, (err) => {
+                            console.error('監聽設定檔錯誤:', err);
+                            setSyncStatus('offline', '權限不足：請檢查 Firestore 安全規則');
+                        });
+
+                        // 即時監聽明細集合變化
+                        onSnapshot(getRecordsCollectionRef(), (querySnap) => {
+                            const list = [];
+                            querySnap.forEach((docItem) => {
+                                list.push({ id: docItem.id, ...docItem.data() });
+                            });
+                            appState.records = list;
+                            refreshAllUI();
+                        }, (err) => {
+                            console.error('監聽明細集合錯誤:', err);
+                        });
+                    } catch (fsErr) {
+                        console.error('Firestore 初始化錯誤:', fsErr);
+                        setSyncStatus('offline', '資料庫連線異常，請檢查 Firestore 規則');
+                        loadLocalFallback();
+                        refreshAllUI();
+                    }
+                });
+            } catch (authErr) {
+                console.error('Firebase 啟動錯誤:', authErr);
+                isOfflineMode = true;
+                loadLocalFallback();
+                setSyncStatus('offline', '雲端驗證失敗 (請確認已開啟匿名登入)');
+                document.getElementById('displayUserId').textContent = '本機單機模式';
+                refreshAllUI();
+            }
+        }
+
         // 將事件處理函式掛載至全域 window 供 HTML 按鈕呼叫
+        window.selectFloor = selectFloor;
+        window.selectDirection = selectDirection;
+        window.selectType = selectType;
         window.adjustCount = adjustCount;
         window.toggleCalibration = toggleCalibration;
         window.updateBaseStats = updateBaseStats;
