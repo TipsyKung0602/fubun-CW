@@ -34,15 +34,25 @@
     </style>
 </head>
 <body class="bg-slate-100 text-slate-800 antialiased min-h-screen pb-16 select-none">
+
+    <!-- 頂部導覽列 -->
+    <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+        <div class="max-w-5xl mx-auto px-4 py-3.5 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-inner">
+                    <i class="fa-solid fa-building text-lg text-white"></i>
                 </div>
                 <div>
                     <h1 class="text-lg sm:text-xl font-bold tracking-wide">單元吊裝進度回報系統</h1>
-                    <p class="text-xs text-slate-400">自動累計計算 &bull; 週報統計 (週日~週六)</p>
+                    <div class="flex items-center space-x-2 mt-0.5">
+                        <span id="syncStatusDot" class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+                        <p id="syncStatusText" class="text-xs text-slate-300">雲端連線中...</p>
+                    </div>
                 </div>
             </div>
             <div class="text-right">
-                <div class="text-xs text-slate-400">整棟總累計</div>
-                <div id="headerTotalCount" class="text-xl sm:text-2xl font-bold text-emerald-400">0 <span class="text-xs font-normal text-slate-300">單元</span></div>
+                <div class="text-xs text-slate-400">整棟總累計 / 總數</div>
+                <div id="headerTotalCount" class="text-lg sm:text-xl font-bold text-emerald-400">1,842 <span class="text-xs font-normal text-slate-300">/ 2,707 樘</span></div>
             </div>
         </div>
     </header>
@@ -61,7 +71,7 @@
                         選擇樓層
                     </h2>
                     <span id="selectedFloorBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-600 border border-blue-200">
-                        目前選擇：3F
+                        目前選擇：18F
                     </span>
                 </div>
                 
@@ -127,22 +137,22 @@
                     </div>
                 </div>
 
-                <!-- 數據微調/校正折疊區 (方便使用者設定初始歷史累計) -->
+                <!-- 數據微調/校正折疊區 -->
                 <div class="mt-4 pt-3 border-t border-slate-100">
                     <button type="button" onclick="toggleCalibration()" class="text-xs text-slate-500 hover:text-blue-600 flex items-center transition">
-                        <i class="fa-solid fa-sliders mr-1.5"></i> 歷史基準值校正 (若已有舊進度可點此設定初始累計)
+                        <i class="fa-solid fa-sliders mr-1.5"></i> 歷史基準值校正 (若需微調各層或整棟累計可點此)
                         <i id="calibChevron" class="fa-solid fa-chevron-down ml-1 text-[10px] transition-transform"></i>
                     </button>
                     <div id="calibrationPanel" class="hidden mt-3 p-3.5 bg-amber-50/70 border border-amber-200/80 rounded-xl grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
                             <label class="block text-xs font-medium text-amber-900 mb-1">
-                                <span id="calibFloorName">3F</span> 既有累計基準 (不含本次)
+                                <span id="calibFloorName">18F</span> 歷史基準值 (不含明細紀錄)
                             </label>
-                            <input type="number" id="baseFloorInput" min="0" value="0" onchange="updateBaseStats()" class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800">
+                            <input type="number" id="baseFloorInput" value="0" onchange="updateBaseStats()" class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800">
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-amber-900 mb-1">
-                                整棟既有累計基準 (不含本次)
+                                整棟既有累計總數 (不含本次)
                             </label>
                             <input type="number" id="baseBuildingInput" min="0" value="0" onchange="updateBaseStats()" class="w-full px-3 py-1.5 bg-white border border-amber-300 rounded-lg text-sm font-semibold text-slate-800">
                         </div>
@@ -175,7 +185,7 @@
                         <div id="previewToday" class="text-base font-bold text-white">0</div>
                     </div>
                     <div class="border-x border-slate-700">
-                        <div class="text-[11px] text-slate-400"><span id="previewFloorLabel">3F</span> 累計</div>
+                        <div class="text-[11px] text-slate-400"><span id="previewFloorLabel">18F</span> 累計</div>
                         <div id="previewFloorTotal" class="text-base font-bold text-blue-400">0</div>
                     </div>
                     <div>
@@ -218,14 +228,14 @@
                         <div class="text-xs text-indigo-600 font-medium">本週完成小計</div>
                         <div class="mt-1 flex items-baseline space-x-1">
                             <span id="weeklySubtotal" class="text-2xl font-bold text-indigo-900">0</span>
-                            <span class="text-xs text-indigo-700">單元</span>
+                            <span class="text-xs text-indigo-700">樘</span>
                         </div>
                     </div>
                     <div class="bg-emerald-50/70 border border-emerald-100 rounded-xl p-3">
-                        <div class="text-xs text-emerald-600 font-medium">整棟累計完成</div>
+                        <div class="text-xs text-emerald-600 font-medium">整棟累計 / 總數</div>
                         <div class="mt-1 flex items-baseline space-x-1">
                             <span id="weeklyCumulative" class="text-2xl font-bold text-emerald-900">0</span>
-                            <span class="text-xs text-emerald-700">單元</span>
+                            <span class="text-xs text-emerald-700">/ 2,707 樘</span>
                         </div>
                     </div>
                 </div>
@@ -243,15 +253,15 @@
                     <div class="flex justify-between items-center mb-2">
                         <span class="text-xs font-semibold text-slate-500">本週明細紀錄 (週日~週六)</span>
                         <button type="button" onclick="toggleConfirmReset()" id="resetTriggerBtn" class="text-[11px] text-rose-500 hover:text-rose-700 underline">
-                            清除全部資料
+                            恢復歷史初始資料
                         </button>
                     </div>
 
                     <!-- 內嵌式確認刪除提示框 (取代原生 confirm) -->
                     <div id="resetConfirmBox" class="hidden mb-3 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs">
-                        <p class="text-rose-800 font-semibold mb-2">確定要清空所有歷史進度與基準值嗎？此動作無法復原。</p>
+                        <p class="text-rose-800 font-semibold mb-2">確定要清空新增進度並恢復至初始數據 (1,842 / 2,707 樘) 嗎？</p>
                         <div class="flex space-x-2">
-                            <button type="button" onclick="executeResetAll()" class="px-3 py-1.5 bg-rose-600 text-white font-semibold rounded-lg hover:bg-rose-700">確定清空</button>
+                            <button type="button" onclick="executeResetAll()" class="px-3 py-1.5 bg-rose-600 text-white font-semibold rounded-lg hover:bg-rose-700">確定恢復初始</button>
                             <button type="button" onclick="toggleConfirmReset()" class="px-3 py-1.5 bg-white text-slate-600 border border-slate-300 rounded-lg hover:bg-slate-50">取消</button>
                         </div>
                     </div>
@@ -264,6 +274,15 @@
         </div>
     </main>
 
+    <!-- 底部協作狀態與完整裝置識別碼 -->
+    <footer class="max-w-5xl mx-auto px-4 mt-8 text-center text-xs text-slate-400">
+        <div class="inline-flex flex-wrap items-center justify-center gap-2 bg-white/80 border border-slate-200 rounded-xl px-4 py-2">
+            <span><i class="fa-solid fa-cloud text-blue-500 mr-1"></i>多裝置即時雲端共同編輯</span>
+            <span class="text-slate-300">|</span>
+            <span class="break-all">裝置識別碼：<span id="displayUserId" class="font-mono text-slate-600 select-text">連線取得中...</span></span>
+        </div>
+    </footer>
+
     <!-- 浮動 Toast 訊息提示框 (取代 alert) -->
     <div id="toastNotification" class="fixed bottom-5 left-1/2 transform -translate-x-1/2 translate-y-20 opacity-0 transition-all duration-300 z-50 pointer-events-none">
         <div class="bg-slate-900/95 text-white px-5 py-3 rounded-full shadow-xl border border-slate-700 flex items-center space-x-2.5 text-sm font-medium">
@@ -272,11 +291,18 @@
         </div>
     </div>
 
-    <script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
         /**
          * 系統狀態與常數定義
          */
-        const STORAGE_KEY = 'curtain_wall_installation_data_v1';
+        const BUILDING_TARGET_TOTAL = 2707;
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
 
         // 生成樓層清單: 1F ~ 27F 加上 R1F ~ R3F
         const FLOORS = [
@@ -286,33 +312,76 @@
         const DIRECTIONS = ['東', '西', '南', '北'];
         const WORK_TYPES = ['P1', 'P2', 'P2前置', 'WW', 'P3', 'P4', 'P5'];
 
+        // 各樓層既有歷史基準數量 (不含下方本週 27 樘明細；加總 1,815 + 本週 27 = 1,842 樘)
+        const INITIAL_BASE_FLOOR_COUNTS = {
+            '1F': 33,  '2F': 35,  '3F': 60,  '4F': 60,  '5F': 70,
+            '6F': 82,  '7F': 82,  '8F': 82,  '9F': 82,  '10F': 82,
+            '11F': 82, '12F': 82, '13F': 82, '14F': 82, '15F': 82,
+            '16F': 82, '17F': 88, '18F': 76, '19F': 82, '20F': 87,
+            '21F': 82, '22F': 77, '23F': 49, '24F': 38, '25F': 38,
+            '26F': 19, '27F': 19, 'R1F': 0,  'R2F': 0,  'R3F': 0
+        };
+
+        // 本週既定完成明細紀錄 (2026/11/16 ~ 2026/11/19，小計 27 樘)
+        const INITIAL_WEEKLY_HISTORY = [
+            { date: '2026-11-16', floor: '17F', direction: '東', type: 'P2', count: 6 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P2前置', count: 2 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P2前置', count: 2 },
+            { date: '2026-11-17', floor: '23F', direction: '東', type: 'P5', count: 11 },
+            { date: '2026-11-19', floor: '18F', direction: '東', type: 'P2', count: 6 }
+        ];
+
+        // 雲端服務實例與使用者狀態
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let unsubscribeRecords = null;
+        let unsubscribeConfig = null;
+
         // 應用程式核心狀態
         let appState = {
-            selectedFloor: '3F',
+            selectedFloor: '18F',
             selectedDirection: '東',
-            selectedType: 'P3',
-            // 儲存結構:
-            // records: [{ id, date: 'YYYY-MM-DD', floor, direction, type, count, timestamp }]
-            // baseFloorCounts: { '3F': 41, ... } (歷史基準校正值)
-            // baseBuildingOffset: 1511 (整棟歷史基準校正差額)
+            selectedType: 'P2',
             records: [],
-            baseFloorCounts: {},
+            baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
             baseBuildingOffset: 0
         };
 
         /**
-         * 初始化與本地資料載入
+         * 取得共享雲端集合與設定檔參考路徑 (跨裝置共同編輯)
          */
-        function initApp() {
-            loadFromStorage();
+        function getRecordsCollectionRef() {
+            return collection(db, 'artifacts', appId, 'public', 'data', 'installation_records');
+        }
 
+        function getConfigDocRef() {
+            return doc(db, 'artifacts', appId, 'public', 'data', 'installation_meta', 'config');
+        }
+
+        /**
+         * 更新頂部同步狀態顯示
+         */
+        function setSyncStatus(state, text) {
+            const dot = document.getElementById('syncStatusDot');
+            const label = document.getElementById('syncStatusText');
+            label.textContent = text;
+            if (state === 'connected') {
+                dot.className = 'w-2 h-2 rounded-full bg-emerald-400';
+            } else if (state === 'error') {
+                dot.className = 'w-2 h-2 rounded-full bg-rose-500';
+            } else {
+                dot.className = 'w-2 h-2 rounded-full bg-amber-400 animate-pulse';
+            }
+        }
+
+        /**
+         * 初始化應用程式與雲端即時連線
+         */
+        async function initApp() {
             // 設定今日日期為預設值 (考量本地時區)
-            const today = new Date();
-            const yyyy = today.getFullYear();
-            const mm = String(today.getMonth() + 1).padStart(2, '0');
-            const dd = String(today.getDate()).padStart(2, '0');
             const dateInput = document.getElementById('recordDate');
-            dateInput.value = `${yyyy}-${mm}-${dd}`;
+            dateInput.value = getTodayDateStr();
 
             // 綁定輸入監聽事件
             document.getElementById('todayCount').addEventListener('input', updatePreview);
@@ -321,59 +390,152 @@
                 updatePreview();
             });
 
-            // 渲染所有互動按鈕與畫面
+            // 先渲染基礎介面
             renderFloorButtons();
             renderDirectionButtons();
             renderTypeButtons();
             syncCalibrationInputs();
             updatePreview();
             renderWeeklyStats();
+
+            // 啟動雲端資料庫連線
+            if (!firebaseConfig) {
+                setSyncStatus('error', '未偵測到雲端設定，目前為預覽模式');
+                document.getElementById('displayUserId').textContent = '離線模式';
+                return;
+            }
+
+            try {
+                const app = initializeApp(firebaseConfig);
+                auth = getAuth(app);
+                db = getFirestore(app);
+
+                setSyncStatus('loading', '正在驗證並連線雲端...');
+
+                // 優先使用自訂權杖登入，否則匿名登入 (Auth Before Queries)
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (!user) return;
+                    currentUser = user;
+                    document.getElementById('displayUserId').textContent = user.uid;
+                    await ensureCloudInitialized();
+                    startRealtimeSync();
+                });
+            } catch (err) {
+                console.error('雲端初始化失敗:', err);
+                setSyncStatus('error', '雲端連線失敗，請重新整理');
+                showToast('雲端連線失敗，請檢查網路狀態', true);
+            }
         }
 
         /**
-         * 從 LocalStorage 讀取資料
+         * 確保雲端首次開啟時自動寫入初始各樓層與本週數據 (避免多裝置重複建立)
          */
-        function loadFromStorage() {
+        async function ensureCloudInitialized() {
+            if (!currentUser) return;
             try {
-                const raw = localStorage.getItem(STORAGE_KEY);
-                if (raw) {
-                    const parsed = JSON.parse(raw);
-                    appState.records = Array.isArray(parsed.records) ? parsed.records : [];
-                    appState.baseFloorCounts = parsed.baseFloorCounts || {};
-                    appState.baseBuildingOffset = Number(parsed.baseBuildingOffset) || 0;
-                    if (parsed.lastFloor && FLOORS.includes(parsed.lastFloor)) {
-                        appState.selectedFloor = parsed.lastFloor;
-                    }
-                    if (parsed.lastDirection && DIRECTIONS.includes(parsed.lastDirection)) {
-                        appState.selectedDirection = parsed.lastDirection;
-                    }
-                    if (parsed.lastType && WORK_TYPES.includes(parsed.lastType)) {
-                        appState.selectedType = parsed.lastType;
-                    }
+                const configRef = getConfigDocRef();
+                const configSnap = await getDoc(configRef);
+                if (!configSnap.exists()) {
+                    await setDoc(configRef, {
+                        baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
+                        baseBuildingOffset: 0,
+                        initialized: true,
+                        updatedAt: Date.now()
+                    });
+
+                    const recordsCol = getRecordsCollectionRef();
+                    const seedPromises = INITIAL_WEEKLY_HISTORY.map((item, idx) => {
+                        const docId = `init_week_${idx + 1}`;
+                        return setDoc(doc(recordsCol, docId), {
+                            date: item.date,
+                            floor: item.floor,
+                            direction: item.direction,
+                            type: item.type,
+                            count: item.count,
+                            isHistoricalImport: false,
+                            createdBy: currentUser.uid,
+                            timestamp: new Date(item.date).getTime() + idx
+                        });
+                    });
+                    await Promise.all(seedPromises);
                 }
             } catch (err) {
-                console.error('讀取本地紀錄失敗:', err);
+                console.error('初始化雲端基準資料失敗:', err);
             }
         }
 
         /**
-         * 儲存資料至 LocalStorage
+         * 啟動即時監聽 (任何裝置新增、刪除或校正都會自動同步到所有裝置)
          */
-        function saveToStorage() {
-            try {
-                const payload = {
-                    records: appState.records,
-                    baseFloorCounts: appState.baseFloorCounts,
-                    baseBuildingOffset: appState.baseBuildingOffset,
-                    lastFloor: appState.selectedFloor,
-                    lastDirection: appState.selectedDirection,
-                    lastType: appState.selectedType
-                };
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
-            } catch (err) {
-                console.error('儲存資料失敗:', err);
-                showToast('儲存空間不足或受限，無法保存紀錄', true);
-            }
+        function startRealtimeSync() {
+            if (!currentUser) return;
+
+            if (unsubscribeConfig) unsubscribeConfig();
+            if (unsubscribeRecords) unsubscribeRecords();
+
+            // 監聽基準值設定
+            unsubscribeConfig = onSnapshot(
+                getConfigDocRef(),
+                (docSnap) => {
+                    if (docSnap.exists()) {
+                        const data = docSnap.data();
+                        appState.baseFloorCounts = data.baseFloorCounts || { ...INITIAL_BASE_FLOOR_COUNTS };
+                        appState.baseBuildingOffset = Number(data.baseBuildingOffset) || 0;
+                        renderFloorButtons();
+                        syncCalibrationInputs();
+                        updatePreview();
+                        renderWeeklyStats();
+                    }
+                    setSyncStatus('connected', '雲端已同步 • 多裝置即時協作');
+                },
+                (err) => {
+                    console.error('基準設定同步錯誤:', err);
+                    setSyncStatus('error', '雲端同步異常');
+                }
+            );
+
+            // 監聽所有吊裝紀錄集合 (不於查詢中使用 orderBy，改於記憶體內排序)
+            unsubscribeRecords = onSnapshot(
+                getRecordsCollectionRef(),
+                (snapshot) => {
+                    const list = [];
+                    snapshot.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        list.push({
+                            id: docSnap.id,
+                            date: data.date || getTodayDateStr(),
+                            floor: data.floor || '1F',
+                            direction: data.direction || '東',
+                            type: data.type || 'P1',
+                            count: Number(data.count) || 0,
+                            reportText: data.reportText || '',
+                            isHistoricalImport: Boolean(data.isHistoricalImport),
+                            timestamp: Number(data.timestamp) || 0
+                        });
+                    });
+
+                    // 依時間倒序排列，最新紀錄顯示在最上方
+                    list.sort((a, b) => b.timestamp - a.timestamp);
+                    appState.records = list;
+
+                    renderFloorButtons();
+                    syncCalibrationInputs();
+                    updatePreview();
+                    renderWeeklyStats();
+                    setSyncStatus('connected', '雲端已同步 • 多裝置即時協作');
+                },
+                (err) => {
+                    console.error('吊裝紀錄同步錯誤:', err);
+                    setSyncStatus('error', '無法讀取雲端紀錄');
+                    showToast('同步紀錄時發生錯誤', true);
+                }
+            );
         }
 
         /**
@@ -399,11 +561,10 @@
                 }`;
                 btn.innerHTML = `
                     <span>${floor}</span>
-                    ${hasData && !isSelected ? `<span class="block text-[10px] font-normal text-blue-600 leading-none mt-0.5">${floorRecordedSum}</span>` : ''}
+                    ${hasData ? `<span class="block text-[10px] font-normal ${isSelected ? 'text-blue-100' : 'text-blue-600'} leading-none mt-0.5">${floorRecordedSum}</span>` : ''}
                 `;
                 btn.onclick = () => {
                     appState.selectedFloor = floor;
-                    document.getElementById('selectedFloorBadge').textContent = `目前選擇：${floor}`;
                     renderFloorButtons();
                     syncCalibrationInputs();
                     updatePreview();
@@ -440,7 +601,7 @@
         }
 
         /**
-         * 渲染工項按鈕 (P1, P2, P2前置, P3, P4, P5)
+         * 渲染工項按鈕 (P1, P2, P2前置, WW, P3, P4, P5)
          */
         function renderTypeButtons() {
             const container = document.getElementById('typeGroup');
@@ -477,23 +638,23 @@
         }
 
         /**
-         * 計算某樓層目前累計完成總數 (系統紀錄 + 歷史基準)
+         * 計算某樓層目前累計完成總數 (雲端明細紀錄 + 歷史微調基準)
          */
         function getFloorRecordedSum(floor) {
             const recordsSum = appState.records
                 .filter(r => r.floor === floor)
                 .reduce((acc, cur) => acc + cur.count, 0);
             const base = Number(appState.baseFloorCounts[floor]) || 0;
-            return recordsSum + base;
+            return Math.max(0, recordsSum + base);
         }
 
         /**
-         * 計算整棟目前累計完成總數 (所有紀錄 + 各樓層歷史基準 + 整棟額外基準)
+         * 計算整棟目前累計完成總數 (所有紀錄 + 各樓層微調基準 + 整棟額外基準)
          */
         function getBuildingRecordedSum() {
             const allRecordsSum = appState.records.reduce((acc, cur) => acc + cur.count, 0);
             const allFloorBaseSum = Object.values(appState.baseFloorCounts).reduce((acc, val) => acc + (Number(val) || 0), 0);
-            return allRecordsSum + allFloorBaseSum + (Number(appState.baseBuildingOffset) || 0);
+            return Math.max(0, allRecordsSum + allFloorBaseSum + (Number(appState.baseBuildingOffset) || 0));
         }
 
         /**
@@ -518,24 +679,37 @@
         }
 
         /**
-         * 使用者手動修改歷史基準值時更新計算
+         * 使用者手動修改歷史基準值時更新並同步至雲端
          */
-        function updateBaseStats() {
+        async function updateBaseStats() {
+            if (!currentUser) {
+                showToast('雲端連線尚未就緒，請稍候再試', true);
+                return;
+            }
+
             const floor = appState.selectedFloor;
-            const newFloorBase = Math.max(0, parseInt(document.getElementById('baseFloorInput').value, 10) || 0);
+            const newFloorBase = parseInt(document.getElementById('baseFloorInput').value, 10) || 0;
             appState.baseFloorCounts[floor] = newFloorBase;
 
-            // 計算除了整棟額外基準以外的總和
             const recordsSum = appState.records.reduce((acc, cur) => acc + cur.count, 0);
             const allFloorBases = Object.values(appState.baseFloorCounts).reduce((acc, val) => acc + (Number(val) || 0), 0);
-            const desiredBuildingTotal = Math.max(recordsSum + allFloorBases, parseInt(document.getElementById('baseBuildingInput').value, 10) || 0);
+            const desiredBuildingTotal = Math.max(0, parseInt(document.getElementById('baseBuildingInput').value, 10) || 0);
 
             appState.baseBuildingOffset = desiredBuildingTotal - (recordsSum + allFloorBases);
-            document.getElementById('baseBuildingInput').value = desiredBuildingTotal;
+            document.getElementById('baseBuildingInput').value = getBuildingRecordedSum();
 
-            saveToStorage();
-            updatePreview();
-            renderWeeklyStats();
+            try {
+                await setDoc(getConfigDocRef(), {
+                    baseFloorCounts: appState.baseFloorCounts,
+                    baseBuildingOffset: appState.baseBuildingOffset,
+                    initialized: true,
+                    updatedAt: Date.now()
+                }, { merge: true });
+                showToast('已更新基準值並同步至所有裝置');
+            } catch (err) {
+                console.error('更新雲端基準值失敗:', err);
+                showToast('雲端更新失敗，請稍後再試', true);
+            }
         }
 
         /**
@@ -564,58 +738,37 @@
             document.getElementById('previewFloorLabel').textContent = floor;
             document.getElementById('previewFloorTotal').textContent = projectedFloorTotal;
             document.getElementById('previewBuildingTotal').textContent = projectedBuildingTotal;
-            document.getElementById('headerTotalCount').innerHTML = `${currentBuildingExisting} <span class="text-xs font-normal text-slate-300">單元</span>`;
+            const progressPct = ((currentBuildingExisting / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
+            document.getElementById('headerTotalCount').innerHTML = `${currentBuildingExisting.toLocaleString()} <span class="text-xs font-normal text-slate-300">/ ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘 (${progressPct}%)</span>`;
         }
 
         /**
-         * 跨平台複製文字函式 (支援手機與電腦，並包含 execCommand 備援機制)
+         * 跨平台複製文字函式 (支援手機與電腦，使用 execCommand 確保 iFrame 與行動端相容)
          */
         function copyToClipboard(text, successMsg) {
-            const textarea = document.getElementById('generatedText');
-            const originalVal = textarea.value;
-
-            // 若要複製的文字與 textarea 不同（例如複製週報），暫時替換或建立隱藏元素選取
-            if (text !== originalVal) {
-                const tempInput = document.createElement('textarea');
-                tempInput.value = text;
-                tempInput.style.position = 'fixed';
-                tempInput.style.opacity = '0';
-                document.body.appendChild(tempInput);
-                tempInput.focus();
-                tempInput.select();
-                tempInput.setSelectionRange(0, 99999);
-                try {
-                    document.execCommand('copy');
-                    showToast(successMsg);
-                } catch (e) {
-                    showToast('複製失敗，請手動選取複製', true);
-                }
-                document.body.removeChild(tempInput);
-                return;
-            }
-
-            // 直接選取主文字框並複製 (相容 iOS / Android / 桌面瀏覽器)
-            textarea.focus();
-            textarea.select();
-            textarea.setSelectionRange(0, 99999);
+            const tempInput = document.createElement('textarea');
+            tempInput.value = text;
+            tempInput.setAttribute('readonly', '');
+            tempInput.style.position = 'fixed';
+            tempInput.style.top = '-9999px';
+            tempInput.style.left = '-9999px';
+            document.body.appendChild(tempInput);
+            tempInput.focus();
+            tempInput.select();
+            tempInput.setSelectionRange(0, 99999);
 
             try {
                 const successful = document.execCommand('copy');
                 if (successful) {
                     showToast(successMsg);
-                } else if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text).then(() => showToast(successMsg));
                 } else {
-                    showToast('請手動長按文字進行複製', true);
+                    showToast('複製失敗，請長按上方文字框手動複製', true);
                 }
             } catch (err) {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(text)
-                        .then(() => showToast(successMsg))
-                        .catch(() => showToast('複製失敗，請手動選取複製', true));
-                } else {
-                    showToast('複製失敗，請手動選取複製', true);
-                }
+                console.error('複製失敗:', err);
+                showToast('複製失敗，請長按上方文字框手動複製', true);
+            } finally {
+                document.body.removeChild(tempInput);
             }
         }
 
@@ -628,38 +781,58 @@
         }
 
         /**
-         * 記錄本筆進度至資料庫，並自動複製文字
+         * 記錄本筆進度至雲端資料庫，並自動複製文字
          */
-        function recordAndCopy() {
+        async function recordAndCopy() {
             const todayNum = parseInt(document.getElementById('todayCount').value, 10) || 0;
             if (todayNum <= 0) {
                 showToast('請輸入大於 0 的完成數量', true);
                 return;
             }
+            if (!currentUser) {
+                showToast('雲端連線尚未就緒，請稍候再試', true);
+                return;
+            }
 
-            // 先取得包含本次數量的完整文字並複製
+            // 先於同步事件中複製文字，確保手機瀏覽器允許寫入剪貼簿
             const finalReportText = document.getElementById('generatedText').value;
-            copyToClipboard(finalReportText, '已記錄進度並複製文字！');
+            copyToClipboard(finalReportText, '已同步記錄至雲端並複製文字！');
 
             const recordDate = document.getElementById('recordDate').value || getTodayDateStr();
 
-            // 寫入紀錄
-            appState.records.unshift({
-                id: Date.now().toString(),
-                date: recordDate,
-                floor: appState.selectedFloor,
-                direction: appState.selectedDirection,
-                type: appState.selectedType,
-                count: todayNum,
-                reportText: finalReportText,
-                timestamp: Date.now()
-            });
+            try {
+                await addDoc(getRecordsCollectionRef(), {
+                    date: recordDate,
+                    floor: appState.selectedFloor,
+                    direction: appState.selectedDirection,
+                    type: appState.selectedType,
+                    count: todayNum,
+                    reportText: finalReportText,
+                    isHistoricalImport: false,
+                    createdBy: currentUser.uid,
+                    timestamp: Date.now()
+                });
+            } catch (err) {
+                console.error('寫入雲端紀錄失敗:', err);
+                showToast('寫入雲端失敗，請檢查網路後重試', true);
+            }
+        }
 
-            saveToStorage();
-            renderFloorButtons();
-            syncCalibrationInputs();
-            updatePreview();
-            renderWeeklyStats();
+        /**
+         * 刪除單筆雲端紀錄 (所有裝置即時更新)
+         */
+        async function deleteRecord(recordId) {
+            if (!currentUser) {
+                showToast('雲端連線尚未就緒，請稍候再試', true);
+                return;
+            }
+            try {
+                await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'installation_records', recordId));
+                showToast('已刪除該筆紀錄並同步至所有裝置');
+            } catch (err) {
+                console.error('刪除雲端紀錄失敗:', err);
+                showToast('刪除紀錄失敗，請稍後再試', true);
+            }
         }
 
         /**
@@ -690,68 +863,79 @@
             return `${m}/${d}`;
         }
 
+        /**
+         * 取得今日 YYYY-MM-DD 字串
+         */
         function getTodayDateStr() {
             const now = new Date();
             return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
         }
 
         /**
-         * 渲染本週 (週日至週六) 統計資訊與明細
+         * 取得目前所選日期所屬週的統計數據
          */
-        function renderWeeklyStats() {
+        function getWeeklyData() {
             const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
             const { sunday, saturday } = getWeekBounds(selectedDateStr);
 
-            document.getElementById('weekRangeDisplay').textContent =
-                `統計週期：${formatShortDate(sunday)} (週日) ~ ${formatShortDate(saturday)} (週六)`;
-
-            // 篩選出落在本週區間內的紀錄
             const weeklyRecords = appState.records.filter(rec => {
                 const [ry, rm, rd] = rec.date.split('-').map(Number);
                 const recDate = new Date(ry, rm - 1, rd, 12, 0, 0);
                 return recDate >= sunday && recDate <= saturday;
             });
 
-            // 計算本週小計
             const weeklySubtotal = weeklyRecords.reduce((sum, r) => sum + r.count, 0);
             const totalCumulative = getBuildingRecordedSum();
 
-            document.getElementById('weeklySubtotal').textContent = weeklySubtotal;
-            document.getElementById('weeklyCumulative').textContent = totalCumulative;
-
-            // 統計本週完成哪些樓層 (按樓層順序排列並顯示各樓層本週小計)
             const floorMap = {};
             weeklyRecords.forEach(r => {
                 floorMap[r.floor] = (floorMap[r.floor] || 0) + r.count;
             });
-
             const sortedFloors = Object.keys(floorMap).sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
-            const badgesContainer = document.getElementById('weeklyFloorsBadges');
 
+            return { sunday, saturday, weeklyRecords, weeklySubtotal, totalCumulative, floorMap, sortedFloors };
+        }
+
+        /**
+         * 渲染本週 (週日至週六) 統計資訊與明細
+         */
+        function renderWeeklyStats() {
+            const { sunday, saturday, weeklyRecords, weeklySubtotal, totalCumulative, floorMap, sortedFloors } = getWeeklyData();
+
+            document.getElementById('weekRangeDisplay').textContent =
+                `統計週期：${formatShortDate(sunday)} (週日) ~ ${formatShortDate(saturday)} (週六)`;
+
+            document.getElementById('weeklySubtotal').textContent = weeklySubtotal.toLocaleString();
+            document.getElementById('weeklyCumulative').textContent = totalCumulative.toLocaleString();
+
+            const badgesContainer = document.getElementById('weeklyFloorsBadges');
             if (sortedFloors.length === 0) {
                 badgesContainer.innerHTML = `<span class="text-xs text-slate-400 italic">此週期尚無施工紀錄</span>`;
             } else {
                 badgesContainer.innerHTML = sortedFloors.map(fl => `
                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                        ${fl} <span class="ml-1 text-indigo-600 font-normal">(${floorMap[fl]}單元)</span>
+                        ${fl} <span class="ml-1 text-indigo-600 font-normal">(${floorMap[fl]}樘)</span>
                     </span>
                 `).join('');
             }
 
-            // 渲染本週明細列表
             const listContainer = document.getElementById('weeklyRecordsList');
             if (weeklyRecords.length === 0) {
                 listContainer.innerHTML = `
                     <div class="text-center py-6 bg-slate-50 rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
-                        點擊上方「記錄進度並複製」後，明細將自動累計於此
+                        本週尚無吊裝明細紀錄
                     </div>
                 `;
             } else {
-                listContainer.innerHTML = weeklyRecords.map(rec => `
+                listContainer.innerHTML = weeklyRecords.map(rec => {
+                    const titleText = rec.isHistoricalImport
+                        ? `${rec.floor} 歷史吊裝紀錄`
+                        : `${rec.floor}${rec.direction}向${rec.type}單元吊裝`;
+                    return `
                     <div class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100/80 rounded-xl border border-slate-200/80 transition">
                         <div class="min-w-0 pr-2">
                             <div class="text-xs font-bold text-slate-800 truncate">
-                                ${rec.floor}${rec.direction}向${rec.type}單元吊裝
+                                ${titleText}
                                 <span class="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-800 rounded text-[11px]">+${rec.count}</span>
                             </div>
                             <div class="text-[11px] text-slate-400 mt-0.5">${rec.date}</div>
@@ -760,50 +944,29 @@
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
                     </div>
-                `).join('');
+                `}).join('');
             }
         }
 
         /**
-         * 一鍵複製本週週報摘要
+         * 複製本週進度週報摘要
          */
         function copyWeeklySummary() {
-            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
-            const { sunday, saturday } = getWeekBounds(selectedDateStr);
-            const weeklyRecords = appState.records.filter(rec => {
-                const [ry, rm, rd] = rec.date.split('-').map(Number);
-                const recDate = new Date(ry, rm - 1, rd, 12, 0, 0);
-                return recDate >= sunday && recDate <= saturday;
-            });
-
-            const weeklySubtotal = weeklyRecords.reduce((sum, r) => sum + r.count, 0);
-            const totalCumulative = getBuildingRecordedSum();
-
-            const floorMap = {};
-            weeklyRecords.forEach(r => {
-                floorMap[r.floor] = (floorMap[r.floor] || 0) + r.count;
-            });
-            const sortedFloors = Object.keys(floorMap).sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
-            const floorSummaryStr = sortedFloors.length > 0
-                ? sortedFloors.map(f => `${f}(${floorMap[f]})`).join('、')
+            const { sunday, saturday, weeklySubtotal, totalCumulative, floorMap, sortedFloors } = getWeeklyData();
+            const floorDetails = sortedFloors.length > 0
+                ? sortedFloors.map(fl => `${fl}(${floorMap[fl]}樘)`).join('、')
                 : '無';
+            const progressPct = ((totalCumulative / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
 
-            const summaryText = `【本週單元吊裝進度統計】\n週期：${formatShortDate(sunday)}(日)~${formatShortDate(saturday)}(六)\n完成樓層：${floorSummaryStr}\n本週完成小計：${weeklySubtotal} 單元\n整棟累計完成：${totalCumulative} 單元`;
+            const summaryText = [
+                `【本週單元吊裝進度統計】`,
+                `週期：${formatShortDate(sunday)}(日) ~ ${formatShortDate(saturday)}(六)`,
+                `完成樓層：${floorDetails}`,
+                `本週完成小計：${weeklySubtotal} 樘`,
+                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`
+            ].join('\n');
 
-            copyToClipboard(summaryText, '已複製本週進度統計週報！');
-        }
-
-        /**
-         * 刪除單筆紀錄
-         */
-        function deleteRecord(id) {
-            appState.records = appState.records.filter(r => r.id !== id);
-            saveToStorage();
-            renderFloorButtons();
-            syncCalibrationInputs();
-            updatePreview();
-            renderWeeklyStats();
-            showToast('已刪除該筆紀錄並重新計算累計');
+            copyToClipboard(summaryText, '已複製本週進度週報摘要！');
         }
 
         /**
@@ -815,19 +978,50 @@
         }
 
         /**
-         * 執行清空所有資料
+         * 執行清空雲端新增紀錄並恢復至初始各樓層與本週數據 (同步所有裝置)
          */
-        function executeResetAll() {
-            appState.records = [];
-            appState.baseFloorCounts = {};
-            appState.baseBuildingOffset = 0;
-            saveToStorage();
-            toggleConfirmReset();
-            renderFloorButtons();
-            syncCalibrationInputs();
-            updatePreview();
-            renderWeeklyStats();
-            showToast('已清空所有進度與基準資料');
+        async function executeResetAll() {
+            if (!currentUser) {
+                showToast('雲端連線尚未就緒，請稍候再試', true);
+                return;
+            }
+            try {
+                const recordsCol = getRecordsCollectionRef();
+                const snapshot = await getDocs(recordsCol);
+                const deletePromises = [];
+                snapshot.forEach((docSnap) => {
+                    deletePromises.push(deleteDoc(doc(recordsCol, docSnap.id)));
+                });
+                await Promise.all(deletePromises);
+
+                // 重新寫入初始基準與本週 5 筆既定紀錄
+                await setDoc(getConfigDocRef(), {
+                    baseFloorCounts: { ...INITIAL_BASE_FLOOR_COUNTS },
+                    baseBuildingOffset: 0,
+                    initialized: true,
+                    updatedAt: Date.now()
+                });
+
+                const seedPromises = INITIAL_WEEKLY_HISTORY.map((item, idx) => {
+                    return setDoc(doc(recordsCol, `init_week_${idx + 1}`), {
+                        date: item.date,
+                        floor: item.floor,
+                        direction: item.direction,
+                        type: item.type,
+                        count: item.count,
+                        isHistoricalImport: false,
+                        createdBy: currentUser.uid,
+                        timestamp: new Date(item.date).getTime() + idx
+                    });
+                });
+                await Promise.all(seedPromises);
+
+                toggleConfirmReset();
+                showToast(`已恢復至初始數據 (已完成 1,842 / ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘)`);
+            } catch (err) {
+                console.error('恢復初始資料失敗:', err);
+                showToast('恢復初始資料失敗，請稍後再試', true);
+            }
         }
 
         /**
@@ -853,6 +1047,17 @@
                 toast.classList.add('translate-y-20', 'opacity-0');
             }, 2600);
         }
+
+        // 將事件處理函式掛載至全域 window 供 HTML 按鈕呼叫
+        window.adjustCount = adjustCount;
+        window.toggleCalibration = toggleCalibration;
+        window.updateBaseStats = updateBaseStats;
+        window.copyReportText = copyReportText;
+        window.recordAndCopy = recordAndCopy;
+        window.copyWeeklySummary = copyWeeklySummary;
+        window.toggleConfirmReset = toggleConfirmReset;
+        window.executeResetAll = executeResetAll;
+        window.deleteRecord = deleteRecord;
 
         // 啟動應用程式
         window.addEventListener('DOMContentLoaded', initApp);
