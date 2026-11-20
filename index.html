@@ -1024,13 +1024,41 @@
                 }).join('\n')
                 : '・本日無吊裝紀錄';
 
+            // 依「樓層 + 工項」分組加總當日完成數量，供下方標準摘要格式各自列出
+            const groupedItems = {};
+            const groupOrder = [];
+            dailyRecords.forEach(r => {
+                const typeName = r.isHistoricalImport ? '歷史' : r.type;
+                const key = `${r.floor}__${typeName}`;
+                if (!groupedItems[key]) {
+                    groupedItems[key] = {
+                        floor: r.floor,
+                        type: typeName,
+                        todayCount: 0
+                    };
+                    groupOrder.push(key);
+                }
+                groupedItems[key].todayCount += r.count;
+            });
+
+            const bottomFormattedLines = groupOrder.length > 0
+                ? groupOrder.map(key => {
+                    const item = groupedItems[key];
+                    const floorDisplay = item.floor.replace(/F$/i, '樓');
+                    const flCum = getFloorRecordedSum(item.floor);
+                    return `${floorDisplay}${item.type}單元吊裝(當日吊裝/當層已完成數量/總完成：${item.todayCount}/${flCum}/${totalCumulative})`;
+                }).join('\n')
+                : '本日無吊裝紀錄';
+
             const summaryText = [
                 `【每日單元吊裝進度日報】`,
                 `日期：${selectedDateStr}`,
                 `施工明細：`,
                 detailLines,
                 `今日完成小計：${dailySubtotal} 樘`,
-                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`
+                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`,
+                `=======================================`,
+                bottomFormattedLines
             ].join('\n');
 
             copyToClipboard(summaryText, `已複製 ${selectedDateStr} 進度日報！`);
