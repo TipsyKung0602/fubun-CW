@@ -185,8 +185,8 @@
                         <div id="previewToday" class="text-base font-bold text-white">0</div>
                     </div>
                     <div class="border-x border-slate-700">
-                        <div class="text-[11px] text-slate-400"><span id="previewFloorLabel">18F</span> 累計</div>
-                        <div id="previewFloorTotal" class="text-base font-bold text-blue-400">0</div>
+                        <div class="text-[11px] text-slate-400"><span id="previewFloorLabel">18F</span> 累計 / 總數</div>
+                        <div id="previewFloorTotal" class="text-base font-bold text-blue-400">0 / 94</div>
                     </div>
                     <div>
                         <div class="text-[11px] text-slate-400">整棟累計</div>
@@ -209,17 +209,25 @@
 
             <!-- 本週施工統計卡片 (週日至週六) -->
             <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5">
-                <div class="flex justify-between items-start mb-3">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2 mb-3">
                     <div>
                         <h2 class="text-base font-bold text-slate-800 flex items-center">
                             <i class="fa-solid fa-calendar-week text-indigo-600 mr-2"></i>
-                            本週完成進度統計
+                            施工進度統計與報表
                         </h2>
                         <p id="weekRangeDisplay" class="text-xs text-slate-500 mt-0.5">週期：計算中...</p>
                     </div>
-                    <button type="button" onclick="copyWeeklySummary()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-3 py-1.5 rounded-lg border border-indigo-200 transition flex items-center">
-                        <i class="fa-regular fa-clipboard mr-1"></i> 複製週報
-                    </button>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <button type="button" onclick="copyDailySummary()" class="text-xs bg-sky-50 hover:bg-sky-100 text-sky-700 font-semibold px-2.5 py-1.5 rounded-lg border border-sky-200 transition flex items-center">
+                            <i class="fa-regular fa-clipboard mr-1"></i> 複製日報
+                        </button>
+                        <button type="button" onclick="copyWeeklySummary()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-semibold px-2.5 py-1.5 rounded-lg border border-indigo-200 transition flex items-center">
+                            <i class="fa-regular fa-clipboard mr-1"></i> 複製週報
+                        </button>
+                        <button type="button" onclick="copyMonthlySummary()" class="text-xs bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1.5 rounded-lg border border-emerald-200 transition flex items-center">
+                            <i class="fa-regular fa-clipboard mr-1"></i> 複製月報
+                        </button>
+                    </div>
                 </div>
 
                 <!-- 週統計數據摘要卡 -->
@@ -329,6 +337,16 @@
         ];
         const DIRECTIONS = ['東', '西', '南', '北'];
         const WORK_TYPES = ['P1', 'P2', 'P2前置', 'WW', 'P3', 'P4', 'P5'];
+
+        // 各樓層設計總數量 (全棟加總共 2,707 樘)
+        const FLOOR_TARGET_TOTALS = {
+            '1F': 47,   '2F': 58,   '3F': 94,   '4F': 94,   '5F': 94,
+            '6F': 94,   '7F': 94,   '8F': 94,   '9F': 94,   '10F': 94,
+            '11F': 94,  '12F': 94,  '13F': 94,  '14F': 94,  '15F': 94,
+            '16F': 94,  '17F': 106, '18F': 94,  '19F': 106, '20F': 106,
+            '21F': 106, '22F': 106, '23F': 106, '24F': 106, '25F': 106,
+            '26F': 106, '27F': 106, 'R1F': 44,  'R2F': 44,  'R3F': 44
+        };
 
         // 各樓層既有歷史基準數量 (不含下方本週 27 樘明細；加總 1,815 + 本週 27 = 1,842 樘)
         const INITIAL_BASE_FLOOR_COUNTS = {
@@ -575,20 +593,24 @@
             FLOORS.forEach(floor => {
                 const isSelected = appState.selectedFloor === floor;
                 const floorRecordedSum = getFloorRecordedSum(floor);
+                const floorTarget = FLOOR_TARGET_TOTALS[floor] || 0;
                 const hasData = floorRecordedSum > 0;
+                const isCompleted = floorTarget > 0 && floorRecordedSum >= floorTarget;
 
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = `relative py-2.5 px-1 rounded-xl font-bold text-sm transition-all border ${
+                btn.className = `relative py-2 px-1 rounded-xl font-bold text-sm transition-all border ${
                     isSelected
                         ? 'bg-blue-600 text-white border-blue-600 shadow-md scale-[1.02]'
-                        : hasData
-                            ? 'bg-blue-50/70 text-blue-900 border-blue-200 hover:bg-blue-100'
-                            : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                        : isCompleted
+                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300 hover:bg-emerald-100'
+                            : hasData
+                                ? 'bg-blue-50/70 text-blue-900 border-blue-200 hover:bg-blue-100'
+                                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                 }`;
                 btn.innerHTML = `
                     <span>${floor}</span>
-                    ${hasData ? `<span class="block text-[10px] font-normal ${isSelected ? 'text-blue-100' : 'text-blue-600'} leading-none mt-0.5">${floorRecordedSum}</span>` : ''}
+                    <span class="block text-[10px] font-normal ${isSelected ? 'text-blue-100' : isCompleted ? 'text-emerald-700 font-semibold' : hasData ? 'text-blue-600' : 'text-slate-400'} leading-none mt-0.5">${floorRecordedSum}/${floorTarget}</span>
                 `;
                 btn.onclick = () => {
                     appState.selectedFloor = floor;
@@ -598,7 +620,9 @@
                 };
                 container.appendChild(btn);
             });
-            document.getElementById('selectedFloorBadge').textContent = `目前選擇：${appState.selectedFloor}`;
+            const selTotal = getFloorRecordedSum(appState.selectedFloor);
+            const selTarget = FLOOR_TARGET_TOTALS[appState.selectedFloor] || 0;
+            document.getElementById('selectedFloorBadge').textContent = `目前選擇：${appState.selectedFloor} (${selTotal}/${selTarget} 樘)`;
         }
 
         /**
@@ -763,7 +787,8 @@
             document.getElementById('generatedText').value = formattedString;
             document.getElementById('previewToday').textContent = todayNum;
             document.getElementById('previewFloorLabel').textContent = floor;
-            document.getElementById('previewFloorTotal').textContent = projectedFloorTotal;
+            const floorTarget = FLOOR_TARGET_TOTALS[floor] || 0;
+            document.getElementById('previewFloorTotal').textContent = `${projectedFloorTotal} / ${floorTarget}`;
             document.getElementById('previewBuildingTotal').textContent = projectedBuildingTotal;
             const progressPct = ((currentBuildingExisting / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
             document.getElementById('headerTotalCount').innerHTML = `${currentBuildingExisting.toLocaleString()} <span class="text-xs font-normal text-slate-300">/ ${BUILDING_TARGET_TOTAL.toLocaleString()} 樘 (${progressPct}%)</span>`;
@@ -939,11 +964,14 @@
             if (sortedFloors.length === 0) {
                 badgesContainer.innerHTML = `<span class="text-xs text-slate-400 italic">此週期尚無施工紀錄</span>`;
             } else {
-                badgesContainer.innerHTML = sortedFloors.map(fl => `
+                badgesContainer.innerHTML = sortedFloors.map(fl => {
+                    const flCum = getFloorRecordedSum(fl);
+                    const flTarget = FLOOR_TARGET_TOTALS[fl] || 0;
+                    return `
                     <span class="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold bg-indigo-100 text-indigo-800 border border-indigo-200">
-                        ${fl} <span class="ml-1 text-indigo-600 font-normal">(${floorMap[fl]}樘)</span>
+                        ${fl} <span class="ml-1 text-indigo-600 font-normal">+${floorMap[fl]} (累計${flCum}/${flTarget})</span>
                     </span>
-                `).join('');
+                `}).join('');
             }
 
             const listContainer = document.getElementById('weeklyRecordsList');
@@ -976,17 +1004,54 @@
         }
 
         /**
+         * 複製當日進度日報摘要 (依據上方選擇的施工日期)
+         */
+        function copyDailySummary() {
+            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const dailyRecords = appState.records.filter(r => r.date === selectedDateStr);
+            const dailySubtotal = dailyRecords.reduce((sum, r) => sum + r.count, 0);
+            const totalCumulative = getBuildingRecordedSum();
+            const progressPct = ((totalCumulative / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
+
+            const detailLines = dailyRecords.length > 0
+                ? dailyRecords.map(r => {
+                    const flCum = getFloorRecordedSum(r.floor);
+                    const flTarget = FLOOR_TARGET_TOTALS[r.floor] || 0;
+                    const itemTitle = r.isHistoricalImport
+                        ? `${r.floor}歷史吊裝`
+                        : `${r.floor}${r.direction}向${r.type}單元吊裝`;
+                    return `・${itemTitle}：${r.count} 樘 (本層累計 ${flCum}/${flTarget} 樘)`;
+                }).join('\n')
+                : '・本日無吊裝紀錄';
+
+            const summaryText = [
+                `【每日單元吊裝進度日報】`,
+                `日期：${selectedDateStr}`,
+                `施工明細：`,
+                detailLines,
+                `今日完成小計：${dailySubtotal} 樘`,
+                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`
+            ].join('\n');
+
+            copyToClipboard(summaryText, `已複製 ${selectedDateStr} 進度日報！`);
+        }
+
+        /**
          * 複製本週進度週報摘要
          */
         function copyWeeklySummary() {
             const { sunday, saturday, weeklySubtotal, totalCumulative, floorMap, sortedFloors } = getWeeklyData();
             const floorDetails = sortedFloors.length > 0
-                ? sortedFloors.map(fl => `${fl}(${floorMap[fl]}樘)`).join('、')
+                ? sortedFloors.map(fl => {
+                    const flCum = getFloorRecordedSum(fl);
+                    const flTarget = FLOOR_TARGET_TOTALS[fl] || 0;
+                    return `${fl} 本週+${floorMap[fl]}樘 (累計 ${flCum}/${flTarget})`;
+                }).join('、')
                 : '無';
             const progressPct = ((totalCumulative / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
 
             const summaryText = [
-                `【本週單元吊裝進度統計】`,
+                `【本週單元吊裝進度週報】`,
                 `週期：${formatShortDate(sunday)}(日) ~ ${formatShortDate(saturday)}(六)`,
                 `完成樓層：${floorDetails}`,
                 `本週完成小計：${weeklySubtotal} 樘`,
@@ -994,6 +1059,44 @@
             ].join('\n');
 
             copyToClipboard(summaryText, '已複製本週進度週報摘要！');
+        }
+
+        /**
+         * 複製當月進度月報摘要 (依據上方選擇日期所屬月份)
+         */
+        function copyMonthlySummary() {
+            const selectedDateStr = document.getElementById('recordDate').value || getTodayDateStr();
+            const [yearStr, monthStr] = selectedDateStr.split('-');
+            const yearMonthPrefix = `${yearStr}-${monthStr}`;
+
+            const monthlyRecords = appState.records.filter(r => r.date.startsWith(yearMonthPrefix));
+            const monthlySubtotal = monthlyRecords.reduce((sum, r) => sum + r.count, 0);
+            const totalCumulative = getBuildingRecordedSum();
+            const progressPct = ((totalCumulative / BUILDING_TARGET_TOTAL) * 100).toFixed(1);
+
+            const floorMap = {};
+            monthlyRecords.forEach(r => {
+                floorMap[r.floor] = (floorMap[r.floor] || 0) + r.count;
+            });
+            const sortedFloors = Object.keys(floorMap).sort((a, b) => FLOORS.indexOf(a) - FLOORS.indexOf(b));
+
+            const floorDetails = sortedFloors.length > 0
+                ? sortedFloors.map(fl => {
+                    const flCum = getFloorRecordedSum(fl);
+                    const flTarget = FLOOR_TARGET_TOTALS[fl] || 0;
+                    return `${fl} 本月+${floorMap[fl]}樘 (累計 ${flCum}/${flTarget})`;
+                }).join('、')
+                : '無';
+
+            const summaryText = [
+                `【${yearStr}年${Number(monthStr)}月 單元吊裝進度月報】`,
+                `統計月份：${yearStr}/${monthStr}`,
+                `完成樓層：${floorDetails}`,
+                `本月完成小計：${monthlySubtotal} 樘`,
+                `整棟累計完成：${totalCumulative} / ${BUILDING_TARGET_TOTAL} 樘 (${progressPct}%)`
+            ].join('\n');
+
+            copyToClipboard(summaryText, `已複製 ${yearStr}年${Number(monthStr)}月 進度月報！`);
         }
 
         /**
@@ -1081,7 +1184,9 @@
         window.updateBaseStats = updateBaseStats;
         window.copyReportText = copyReportText;
         window.recordAndCopy = recordAndCopy;
+        window.copyDailySummary = copyDailySummary;
         window.copyWeeklySummary = copyWeeklySummary;
+        window.copyMonthlySummary = copyMonthlySummary;
         window.toggleConfirmReset = toggleConfirmReset;
         window.executeResetAll = executeResetAll;
         window.deleteRecord = deleteRecord;
